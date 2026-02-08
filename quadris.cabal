@@ -10,6 +10,7 @@ executable quadris
     hs-source-dirs: app
     other-modules:
         Util.FixedLengthQueue
+        Util.MisoAesonDeriving
         Util.MisoOptics
         Util.Shuffle
         Util.Util
@@ -42,6 +43,7 @@ executable quadris
         generic-optics,
         linear,
         massiv,
+        miso-aeson,
         miso,
         mtl,
         optics-operators,
