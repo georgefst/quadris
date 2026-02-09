@@ -17,6 +17,7 @@ executable quadris
     default-language: GHC2024
     default-extensions:
         BlockArguments
+        DeriveAnyClass
         DerivingStrategies
         DerivingVia
         DuplicateRecordFields
@@ -29,6 +30,7 @@ executable quadris
         OrPatterns
         OverloadedLabels
         OverloadedRecordDot
+        OverloadedStrings
         PartialTypeSignatures
         RecordWildCards
         ViewPatterns
