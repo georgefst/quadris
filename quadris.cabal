@@ -19,7 +19,6 @@ executable quadris
     default-language: GHC2024
     default-extensions:
         BlockArguments
-        DeriveAnyClass
         DerivingStrategies
         DerivingVia
         DuplicateRecordFields
@@ -38,6 +37,7 @@ executable quadris
         ViewPatterns
     ghc-options:
         -Wall
+        -Wmissing-deriving-strategies
     build-depends:
         base >=4.14,
         aeson,
