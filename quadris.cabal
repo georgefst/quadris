@@ -14,7 +14,6 @@ executable quadris
         Util
         Util.FixedLengthQueue
         Util.MisoAesonDeriving
-        Util.MisoOptics
         Util.Shuffle
     default-language: GHC2024
     default-extensions:
@@ -49,6 +48,7 @@ executable quadris
         linear,
         massiv,
         miso-aeson,
+        miso-optics,
         miso,
         mtl,
         optics-operators,
