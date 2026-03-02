@@ -2,6 +2,7 @@
 
 module Main (main) where
 
+import Data.IORef
 import Foreign.Store
 import Quadris (Opts (..), opts)
 import Quadris.Miso
@@ -37,7 +38,8 @@ main = do
     -- and in theory more efficient, at least for huge models
     -- but the unmount action doesn't get run on reload
     -- and actually, given that it can't do IO directly, we'd need a new action as well...
-    let a = startApp defaultEvents $ (app foreignStoreId model){styles = [Href ("assets/style.css#" <> cacheBuster) False]}
+    levelRef <- newIORef model.level
+    let a = startApp defaultEvents $ (app foreignStoreId levelRef model){styles = [Href ("assets/style.css#" <> cacheBuster) False]}
     getProgName >>= \case
         "<interactive>" -> reload a
         _ -> a
