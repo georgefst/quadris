@@ -44,7 +44,6 @@ main = do
         "<interactive>" -> reload a
         _ -> a
 
-{- FOURMOLU_DISABLE -}
 #ifdef wasi_HOST_OS
 -- TODO we're hitting compiler errors using these, despite the first one being straight from the GHC users' guide
 -- possibly due to using Haskell.nix with the Wasm backend, and our associated hacks
@@ -65,4 +64,3 @@ foreign export javascript "hs_start" main :: IO ()
 fetchCssHash :: IO Word
 fetchCssHash = error "native stub"
 #endif
-{- FOURMOLU_ENABLE -}
