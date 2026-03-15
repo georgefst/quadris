@@ -11,9 +11,12 @@ body {
   height: 100vh;
   > div {
     height: 100%;
-    display: flex;
-    justify-content: space-evenly;
-    align-items: center;
+    > :not(:is(#dummy-key-handler)) {
+      height: 100%;
+      display: flex;
+      justify-content: space-evenly;
+      align-items: center;
+    }
   }
 }
 
