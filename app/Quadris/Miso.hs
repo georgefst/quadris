@@ -264,9 +264,14 @@ app foreignStoreId levelRef m =
         ( \_ ->
             div_
                 []
-                [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId levelRef m]
-                , div_ [id_ "sidebar"] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
-                , div_ [id_ "dummy-key-handler"] ["dummy-key-handler" +> dummyKeyHandler keysPressedTopic]
+                [ div_
+                    []
+                    [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId levelRef m]
+                    , div_ [id_ "sidebar"] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
+                    ]
+                , div_
+                    [id_ "dummy-key-handler"]
+                    ["dummy-key-handler" +> dummyKeyHandler keysPressedTopic]
                 ]
         )
 
