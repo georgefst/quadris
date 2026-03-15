@@ -102,7 +102,7 @@ data KeyAction
     deriving (FromJSON, ToJSON) via (MisoAeson KeyAction)
 
 data Piece = O | I | S | Z | L | J | T
-    deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
+    deriving stock (Eq, Ord, Show, Enum, Bounded)
 instance Uniform Piece where uniformM = uniformEnumM
 
 -- inv: list has length 4, and its xs range from -1 to 2 (a single 2 for `I`), and ys from 0 to 1
