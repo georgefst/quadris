@@ -4,7 +4,6 @@ import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Aeson qualified as Aeson
 import Data.Bifunctor (second)
-import Data.Bool
 import Data.Colour.RGBSpace
 import Data.Colour.RGBSpace.HSL
 import Data.Either.Extra
@@ -142,50 +141,45 @@ rotate = flip \(V2 x y) -> \case
     Rotation180 -> V2 -x -y
     Rotation270 -> V2 -y x
 
-data Cell
-    = Occupied Piece
-    | Ghost Piece
-    | Unoccupied
-    deriving stock (Eq, Ord, Show)
-
 -- inv: has width and height given by game opts, i.e.
 -- (0,0) is the top-left
 -- TODO use length-indexed vectors to statically avoid out-of-bounds errors?
 -- TODO swap out `A.B` for more efficient representation? or at least use sparse array for empty cells
-newtype Grid = Grid (Array A.B A.Ix2 Cell)
+newtype Grid a = Grid (Array A.B A.Ix2 (Maybe a))
     deriving newtype (Eq, Show)
-emptyGrid :: Grid
-emptyGrid = Grid $ A.replicate A.Seq (A.Sz2 opts.gridWidth opts.gridHeight) Unoccupied
-lookupGrid :: Grid -> V2 Int -> Either Bool Cell -- `Left True` means the location is above the top
+    deriving stock (Functor)
+emptyGrid :: Grid a
+emptyGrid = Grid $ A.replicate A.Seq (A.Sz2 opts.gridWidth opts.gridHeight) Nothing
+lookupGrid :: Grid a -> V2 Int -> Either Bool (Maybe a) -- `Left True` means the location is above the top
 lookupGrid (Grid g) (V2 x y) = if y < 0 then Left True else maybeToEither False $ g A.!? A.Ix2 x y
-deconstructGrid :: (Monad m) => Grid -> (V2 Int -> Cell -> m b) -> m ()
+deconstructGrid :: (Monad m) => Grid a -> (V2 Int -> (Maybe a) -> m b) -> m ()
 deconstructGrid (Grid g) = A.iforM_ g . \f (A.Ix2 x y) -> f (V2 x y)
-addPieceToGrid :: Bool -> ActivePiece -> Grid -> Grid
-addPieceToGrid ghost ActivePiece{..} (Grid g) =
+addToGrid :: (Foldable t) => a -> t (V2 Int) -> Grid a -> Grid a
+addToGrid a b (Grid g) =
     -- TODO can we avoid a copy?
-    Grid $ A.withMArrayST_ g \gm -> for_ ((+ pos) . rotate rotation <$> shape piece) \(V2 x y) ->
+    Grid $ A.withMArrayST_ g \gm -> for_ b \(V2 x y) ->
         A.modify_
             gm
             -- this assumes that the extra piece does not intersect occupied cells - if it does we overwrite
-            (const $ pure $ bool Occupied Ghost ghost piece)
+            (const $ pure $ Just a)
             (A.Ix2 x y)
-pieceIntersectsGrid :: ActivePiece -> Grid -> Bool
-pieceIntersectsGrid ActivePiece{..} (Grid g) =
+intersectsGrid :: (Foldable t) => t (V2 Int) -> Grid a -> Bool
+intersectsGrid vs (Grid g) =
     getAny $
         A.ifoldMono
-            (\(A.Ix2 x y) e -> Any $ e /= Unoccupied && any ((V2 x y ==) . (+ pos) . rotate rotation) (shape piece))
+            (\(A.Ix2 x y) e -> Any $ isJust e && any (V2 x y ==) vs)
             g
-removeCompletedLines :: Grid -> (Word, Grid)
+removeCompletedLines :: Grid a -> (Word, Grid a)
 removeCompletedLines (Grid g) = second Grid $ fromMaybe (0, g) do
     -- TODO any failure would be a programmer error, so we just use `fromMaybe` to return the original
     -- that does imply there's probably a better way of doing this...
     g' <- foldrM (\i a -> A.compute <$> A.deleteColumnsM i 1 a) g completedRows
-    g'' <- A.appendM 1 (A.replicate @A.B A.Seq (A.Sz2 opts.gridWidth $ length completedRows) Unoccupied) g'
+    g'' <- A.appendM 1 (A.replicate @A.B A.Seq (A.Sz2 opts.gridWidth $ length completedRows) Nothing) g'
     pure (genericLength completedRows, A.compute g'')
   where
     -- TODO it's a bit inefficient to `compute` on every iteration - there should be a better way
     -- TODO shouldn't it be `A.ifoldOuterSlice`, `A.deleteRowsM` etc. rather than columns?
-    completedRows = A.ifoldInnerSlice (\i row -> mwhen (A.all (/= Unoccupied) row) [i]) g
+    completedRows = A.ifoldInnerSlice (\i row -> mwhen (A.all isJust row) [i]) g
 
 -- a monad for operations which produce finite lists of pieces
 type RandomPieces = StateT [Piece] (State StdGen)
