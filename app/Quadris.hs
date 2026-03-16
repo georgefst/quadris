@@ -173,7 +173,7 @@ pieceIntersectsGrid :: ActivePiece -> Grid -> Bool
 pieceIntersectsGrid ActivePiece{..} (Grid g) =
     getAny $
         A.ifoldMono
-            (\(A.Ix2 x y) e -> Any $ e /= Unoccupied && any ((\v' -> V2 x y == v') . (+ pos) . rotate rotation) (shape piece))
+            (\(A.Ix2 x y) e -> Any $ e /= Unoccupied && any ((V2 x y ==) . (+ pos) . rotate rotation) (shape piece))
             g
 removeCompletedLines :: Grid -> (Word, Grid)
 removeCompletedLines (Grid g) = second Grid $ fromMaybe (0, g) do
