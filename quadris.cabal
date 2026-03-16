@@ -13,7 +13,6 @@ executable quadris
         Quadris.Miso
         Util
         Util.FixedLengthQueue
-        Util.MisoAesonDeriving
         Util.Shuffle
     default-language: GHC2024
     default-extensions:
