@@ -37,7 +37,7 @@ import Util
 import Util.FixedLengthQueue qualified as FLQ
 
 data Model = Model
-    { pile :: Grid -- the cells fixed in place
+    { pile :: Grid Piece -- the cells fixed in place
     , current :: ActivePiece
     , next :: FLQ.Queue Piece
     , paused :: Bool
@@ -100,7 +100,7 @@ grid foreignStoreId levelRef m0 =
                     success <- tryMove (+ V2 0 1)
                     when (not success) do
                         fixPiece
-                        gameOver <- uncurry pieceIntersectsGrid <$> use (fanout #current #pile)
+                        gameOver <- uncurry intersectsGrid . first pieceTiles <$> use (fanout #current #pile)
                         #gameOver .= gameOver
             KeyAction MoveLeft -> void $ tryMove (- V2 1 0)
             KeyAction MoveRight -> void $ tryMove (+ V2 1 0)
@@ -128,18 +128,18 @@ grid foreignStoreId levelRef m0 =
                 ( mwhen gameOver [class_ "game-over"]
                     <> mwhen paused [class_ "paused"]
                 )
-                \f ->
-                    deconstructGrid
-                        ( addPieceToGrid False current
-                            . applyWhen
-                                opts.ghost
-                                (addPieceToGrid True (while (pieceFits pile) (#pos %~ (+ V2 0 1)) current))
-                            $ pile
-                        )
-                        \v -> \case
-                            Unoccupied -> pure ()
-                            Occupied p -> f p False v
-                            Ghost p -> f p True v
+                $ deconstructGrid
+                    ( addToGrid (current.piece, False) (pieceTiles current)
+                        . applyWhen
+                            opts.ghost
+                            ( addToGrid (current.piece, True) $
+                                pieceTiles (while (pieceFits pile) (#pos %~ (+ V2 0 1)) current)
+                            )
+                        $ (,False) <$> pile
+                    )
+                    . flip
+                    . maybe (const $ pure ())
+                    . uncurry
         )
     )
         { subs =
@@ -163,9 +163,10 @@ grid foreignStoreId levelRef m0 =
         l1 <- f <$> use #level
         #level .= l1
         io_ $ writeIORef levelRef l1
+    pieceTiles ActivePiece{..} = (+ pos) . rotate rotation <$> shape piece
     fixPiece = do
         Model{current, next} <- get
-        #pile %= addPieceToGrid False current
+        #pile %= addToGrid current.piece (pieceTiles current)
         next' <- #random %%= flip runRandomPieces (liftRandomiser opts.randomiser)
         fanout #current #next .= first newPiece (FLQ.shift next' next)
         removed <- #pile %%= removeCompletedLines
@@ -177,7 +178,7 @@ grid foreignStoreId levelRef m0 =
         when b $ #current .= p
         pure b
     pieceFits g p =
-        either getAll (all (== Unoccupied))
+        either getAll (all isNothing)
             . (.unwrap)
             . traverse (Validation . first All . lookupGrid g . (+ p.pos) . rotate p.rotation)
             $ shape p.piece
