@@ -10,11 +10,12 @@ source-repository-package
   location: https://github.com/haskell-miso/miso-optics
   tag: c8709bb0dc0f09f89d7ca5f66112bc0bf3106d5a
   --sha256: 0f30hb07rdbk2v0xzzavfg4h27apls80sh1vz9nl5l2qh2368xbs
+-- https://github.com/haskell-miso/miso-aeson/pull/3
 source-repository-package
   type: git
-  location: https://github.com/haskell-miso/miso-aeson
-  tag: d491d91b3437a43dd4410a716ee9d4531b6cf309
-  --sha256: VvCMbZBewybVu1daBGb9PCv5YVCmy0cUIQA2yFW+wEY=
+  location: https://github.com/georgefst/miso-aeson
+  tag: 79ed736f0f62b2c9f5c2c73b4a53ad1527d43c4a
+  --sha256: 19h3b1x8gkpc49v31zrwamnrh2f0s708yad6726llhlajj3dqjdw
 
 if arch(wasm32)
   shared: True

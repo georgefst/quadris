@@ -18,13 +18,13 @@ import Data.Monoid.Extra
 import Data.Time (NominalDiffTime)
 import GHC.Generics (Generic, Generically (Generically))
 import Linear (V2 (V2))
+import Miso.Aeson
 import Miso.CSS (Color)
 import Miso.CSS qualified as MS
 import Miso.JSON (FromJSON, ToJSON)
 import Miso.String (ToMisoString)
 import System.Random.Stateful hiding (next, random)
 import Util
-import Util.MisoAesonDeriving
 import Util.Shuffle
 
 data Opts = Opts
