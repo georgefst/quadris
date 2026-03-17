@@ -93,23 +93,14 @@
           })
           # https://github.com/TheWaWaR/simple-http-server/issues/11#issuecomment-4075592693
           (final: prev: with (import nixpkgs-unstable { inherit system; }); {
-            simple-http-server = rustPlatform.buildRustPackage {
-              pname = "simple-http-server";
+            simple-http-server = callPackage "${nixpkgs-unstable}/pkgs/by-name/si/simple-http-server/package.nix" {
+              rustPlatform = rustPlatform // {
+                buildRustPackage = args: rustPlatform.buildRustPackage (finalAttrs: args finalAttrs // {
               version = "0.8.0";
               src = inputs.simple-http-server;
               cargoHash = "sha256-Ji43cp/+fEJ+z0mTIS/CnId1JP9xk9Ti0CwRRKY2saE=";
               buildFeatures = [ "tls" ];
-              nativeBuildInputs = [ pkg-config ];
-              buildInputs = [ openssl ];
-              doCheck = false;
-              doInstallCheck = true;
-              nativeInstallCheckInputs = [ versionCheckHook ];
-              passthru.updateScript = nix-update-script { };
-              meta = {
-                description = "Simple HTTP server in Rust";
-                homepage = "https://github.com/TheWaWaR/simple-http-server";
-                license = lib.licenses.mit;
-                mainProgram = "simple-http-server";
+                });
               };
             };
           })
