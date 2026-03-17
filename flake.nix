@@ -95,10 +95,10 @@
             simple-http-server = callPackage "${nixpkgs-unstable}/pkgs/by-name/si/simple-http-server/package.nix" {
               rustPlatform = rustPlatform // {
                 buildRustPackage = args: rustPlatform.buildRustPackage (finalAttrs: args finalAttrs // {
-              version = "0.8.0";
-              src = inputs.simple-http-server;
-              cargoHash = "sha256-Ji43cp/+fEJ+z0mTIS/CnId1JP9xk9Ti0CwRRKY2saE=";
-              buildFeatures = [ "tls" ];
+                  version = "0.8.0";
+                  src = inputs.simple-http-server;
+                  cargoHash = "sha256-Ji43cp/+fEJ+z0mTIS/CnId1JP9xk9Ti0CwRRKY2saE=";
+                  buildFeatures = [ "tls" ];
                 });
               };
             };
