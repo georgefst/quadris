@@ -8,7 +8,7 @@
   inputs.simple-http-server = { url = "github:TheWaWaR/simple-http-server/e79ddd3cd12db97062b4a33adc2e436d0022f4be"; flake = false; };
   inputs.browser-wasi-shim = { url = "https://registry.npmjs.org/@bjorn3/browser_wasi_shim/-/browser_wasi_shim-0.3.0.tgz"; flake = false; };
   inputs.ws = { url = "https://registry.npmjs.org/ws/-/ws-8.18.0.tgz"; flake = false; };
-  outputs = inputs@{ self, nixpkgs, flake-utils, haskell-nix, ... }:
+  outputs = inputs@{ self, nixpkgs, nixpkgs-unstable, flake-utils, haskell-nix, ... }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-darwin" ] (system:
       let
         overlays = [
@@ -91,7 +91,7 @@
               };
           })
           # https://github.com/TheWaWaR/simple-http-server/issues/11#issuecomment-4075592693
-          (final: prev: with (import inputs.nixpkgs-unstable { inherit system; }); {
+          (final: prev: with (import nixpkgs-unstable { inherit system; }); {
             simple-http-server = rustPlatform.buildRustPackage {
               pname = "simple-http-server";
               version = "0.8.0";
