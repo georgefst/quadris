@@ -45,7 +45,7 @@ opts =
     Opts
         { gridWidth = 10
         , gridHeight = 18
-        , previewLength = 1
+        , previewLength = 3
         , ghost = False
         , random = newStdGen
         , randomiser = flip shuffleM StateGenM . (:| enumerate) =<< uniformM StateGenM
