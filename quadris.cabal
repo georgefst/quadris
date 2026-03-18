@@ -52,6 +52,7 @@ executable quadris
         mtl,
         optics-operators,
         optics,
+        pretty-simple,
         random,
         safe,
         text,
