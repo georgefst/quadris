@@ -21,7 +21,7 @@ import Miso.Aeson
 import Miso.CSS (Color)
 import Miso.CSS qualified as MS
 import Miso.JSON (FromJSON, ToJSON)
-import Miso.String (ToMisoString)
+import Miso.String (MisoString, ToMisoString)
 import System.Random.Stateful hiding (next, random)
 import Util
 import Util.Shuffle
@@ -101,7 +101,9 @@ data KeyAction
     deriving (FromJSON, ToJSON) via (MisoAeson KeyAction)
 
 data Piece = O | I | S | Z | L | J | T
-    deriving stock (Eq, Ord, Show, Enum, Bounded)
+    deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
+    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically Piece
+    deriving (FromJSON, ToJSON) via (MisoAeson Piece)
 instance Uniform Piece where uniformM = uniformEnumM
 
 -- inv: list has length 4, and its xs range from -1 to 2 (a single 2 for `I`), and ys from 0 to 1
@@ -133,7 +135,9 @@ data Rotation
     | Rotation90
     | Rotation180
     | Rotation270
-    deriving stock (Eq, Ord, Show, Enum, Bounded)
+    deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
+    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically Rotation
+    deriving (FromJSON, ToJSON) via (MisoAeson Rotation)
 rotate :: Rotation -> V2 Int -> V2 Int
 rotate = flip \(V2 x y) -> \case
     NoRotation -> V2 x y
@@ -196,3 +200,75 @@ liftRandomiser r = do
                 pure
     put xs
     pure x
+
+-- ---------------------------------------------------------------------------
+-- WebSocket command/response protocol
+-- ---------------------------------------------------------------------------
+
+-- | A command received from the server over WebSocket.
+data Command
+    = PlacePiece {x :: Int, y :: Int, rotation :: Rotation}
+    | GetBoardState
+    deriving stock (Generic)
+    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically Command
+    deriving (FromJSON, ToJSON) via (MisoAeson Command)
+
+-- | The response sent back to the server over WebSocket after a command.
+data Response
+    = BoardState
+        { board :: [[MisoString]]
+        , currentPiece :: PieceInfo
+        , preview :: [MisoString]
+        , gameOver :: Bool
+        , lineCount :: Word
+        }
+    | PlaceError {reason :: MisoString}
+    deriving stock (Generic)
+    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically Response
+    deriving (FromJSON, ToJSON) via (MisoAeson Response)
+
+-- | Info about the current active piece.
+data PieceInfo = PieceInfo
+    { piece :: MisoString
+    , posX :: Int
+    , posY :: Int
+    , rotation :: MisoString
+    }
+    deriving stock (Generic)
+    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically PieceInfo
+    deriving (FromJSON, ToJSON) via (MisoAeson PieceInfo)
+
+-- | Serialize a piece to its string name.
+pieceName :: Piece -> MisoString
+pieceName = \case
+    O -> "O"; I -> "I"; S -> "S"; Z -> "Z"; L -> "L"; J -> "J"; T -> "T"
+
+-- | Serialize a rotation to its string name.
+rotationName :: Rotation -> MisoString
+rotationName = \case
+    NoRotation -> "NoRotation"
+    Rotation90 -> "Rotation90"
+    Rotation180 -> "Rotation180"
+    Rotation270 -> "Rotation270"
+
+-- | Parse a rotation from its string name.
+parseRotation :: MisoString -> Maybe Rotation
+parseRotation = \case
+    "NoRotation" -> Just NoRotation
+    "Rotation90" -> Just Rotation90
+    "Rotation180" -> Just Rotation180
+    "Rotation270" -> Just Rotation270
+    _ -> Nothing
+
+-- | Convert a grid to a list of rows, where each cell is "" (empty) or a piece name string.
+gridToBoard :: Grid Piece -> [[MisoString]]
+gridToBoard (Grid g) =
+    -- The grid is stored as (x, y) with x=column, y=row
+    -- We need to produce rows: for each y, iterate over x
+    [ [ case g A.!? A.Ix2 x y of
+            Just (Just p) -> pieceName p
+            _ -> ""
+      | x <- [0 .. opts.gridWidth - 1]
+      ]
+    | y <- [0 .. opts.gridHeight - 1]
+    ]

@@ -2,7 +2,6 @@ module Quadris.Miso (app, Model (..), initialModel) where
 
 import Control.Monad
 import Control.Monad.Extra
-import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Bifunctor (bimap, first)
 import Data.Bool
@@ -10,7 +9,6 @@ import Data.Foldable
 import Data.Foldable1 qualified as NE
 import Data.Function
 import Data.Generics.Product
-import Data.IORef
 import Data.IntSet qualified as IntSet
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -23,12 +21,13 @@ import Foreign.Store
 import GHC.Generics (Generic)
 import Quadris
 import Linear (R1 (_x), R2 (_y), V2 (V2))
-import Miso hiding (for, new, (--->), (<---), (<--->))
+import Miso hiding (Response, for, new, (--->), (<---), (<--->))
 import Miso.CSS qualified as MS
 import Miso.Canvas qualified as Canvas
 import Miso.Html
 import Miso.Html.Property hiding (for_)
 import Miso.Optics
+import Miso.WebSocket qualified as WS
 import Optics hiding (uncons)
 import Optics.State.Operators
 import Safe (predDef, succDef)
@@ -45,8 +44,11 @@ data Model = Model
     , random :: ([Piece], StdGen)
     , gameOver :: Bool
     , lineCount :: Word
+    , websocket :: WS.WebSocket
     }
-    deriving stock (Eq, Show, Generic)
+    deriving stock (Eq, Generic)
+instance Show Model where
+    show Model{..} = "Model{pile=" <> show pile <> ", current=" <> show current <> ", gameOver=" <> show gameOver <> ", lineCount=" <> show lineCount <> "}"
 initialModel :: StdGen -> Level -> Model
 initialModel random0 level =
     Model
@@ -55,6 +57,7 @@ initialModel random0 level =
         , gameOver = False
         , lineCount = 0
         , paused = False
+        , websocket = WS.emptyWebSocket
         , ..
         }
   where
@@ -66,8 +69,13 @@ initialModel random0 level =
 data Action
     = NoOp (Maybe MisoString)
     | Init
-    | Tick
     | KeyAction KeyAction
+    -- WebSocket actions
+    | WsConnect
+    | WsOpen WS.WebSocket
+    | WsClosed WS.Closed
+    | WsCommand Command
+    | WsError MisoString
 
 gridCanvas ::
     Int ->
@@ -85,23 +93,58 @@ gridCanvas w h attrs f = Canvas.canvas
             Canvas.fillStyle $ Canvas.ColorArg if ghost then MS.lightgrey else opts.colours p
             Canvas.fillRect (fromIntegral x, fromIntegral y, 1, 1)
 
+-- | Build a 'Response' from the current model state.
+mkBoardStateResponse :: Model -> Response
+mkBoardStateResponse Model{..} =
+    BoardState
+        { board = gridToBoard pile
+        , currentPiece =
+            PieceInfo
+                { piece = pieceName current.piece
+                , posX = let V2 px _ = current.pos in px
+                , posY = let V2 _ py = current.pos in py
+                , rotation = rotationName current.rotation
+                }
+        , preview = pieceName <$> FLQ.toList next
+        , gameOver
+        , lineCount
+        }
+
 grid ::
     (HasType (FLQ.Queue Piece) parent, HasType Level parent, HasType Word parent) =>
-    Word32 -> IORef Level -> Model -> Component parent Model Action
-grid foreignStoreId levelRef m0 =
+    Word32 -> Model -> Component parent Model Action
+grid foreignStoreId m0 =
     ( component
         m0
         ( (>> (io_ . writeStore (Store foreignStoreId) =<< get)) . \case
             NoOp s -> io_ $ traverse_ consoleLog s
-            Init -> subscribe keysPressedTopic KeyAction (const $ NoOp Nothing)
-            Tick -> unlessM (use #paused) do
-                notOver <- not <$> use #gameOver
-                when notOver do
-                    success <- tryMove (+ V2 0 1)
-                    when (not success) do
-                        fixPiece
-                        gameOver <- uncurry intersectsGrid . first pieceTiles <$> use (fanout #current #pile)
-                        #gameOver .= gameOver
+            Init -> do
+                subscribe keysPressedTopic KeyAction (const $ NoOp Nothing)
+                -- Connect to the WebSocket server on the same host
+                WS.connectJSON
+                    (wsUrl :: WS.URL)
+                    WsOpen
+                    WsClosed
+                    WsCommand
+                    WsError
+            WsConnect ->
+                WS.connectJSON
+                    (wsUrl :: WS.URL)
+                    WsOpen
+                    WsClosed
+                    WsCommand
+                    WsError
+            WsOpen ws -> do
+                #websocket .= ws
+                io_ $ consoleLog "WebSocket connected"
+                -- Send initial board state to the server
+                m <- get
+                WS.sendJSON ws (mkBoardStateResponse m)
+            WsClosed _ -> do
+                #websocket .= WS.emptyWebSocket
+                io_ $ consoleLog "WebSocket closed"
+            WsError err -> io_ $ consoleLog ("WebSocket error: " <> err)
+            WsCommand cmd -> handleCommand cmd
             KeyAction MoveLeft -> void $ tryMove (- V2 1 0)
             KeyAction MoveRight -> void $ tryMove (+ V2 1 0)
             KeyAction RotateLeft -> void $ tryRotate \case
@@ -114,8 +157,8 @@ grid foreignStoreId levelRef m0 =
                 L; J; T -> predDef maxBound
             KeyAction SoftDrop -> void $ tryMove (+ V2 0 1)
             KeyAction HardDrop -> whileM (tryMove (+ V2 0 1)) >> fixPiece
-            KeyAction LevelDown -> setLevel $ max 1 . predDef 1
-            KeyAction LevelUp -> setLevel $ min opts.topLevel . succDef opts.topLevel
+            KeyAction LevelDown -> #level %= max 1 . predDef 1
+            KeyAction LevelUp -> #level %= min opts.topLevel . succDef opts.topLevel
             KeyAction Pause -> #paused %= not
             KeyAction Reset -> do
                 m <- get
@@ -142,16 +185,7 @@ grid foreignStoreId levelRef m0 =
                     . uncurry
         )
     )
-        { subs =
-            [ \sink -> forever do
-                -- TODO ideally subs would have some simple way of safely accessing model state
-                -- perhaps we could do this with a subcomponent? not sure even that is possible
-                -- unless we mounted a new component every time the level changes
-                level <- readIORef levelRef
-                sink Tick
-                threadDelay' $ opts.rate level
-            ]
-        , mount = Just Init
+        { mount = Just Init
         , bindings =
             [ typed <--- #next
             , typed <--- #level
@@ -159,11 +193,13 @@ grid foreignStoreId levelRef m0 =
             ]
         }
   where
-    setLevel f = do
-        l1 <- f <$> use #level
-        #level .= l1
-        io_ $ writeIORef levelRef l1
+    -- WebSocket URL: connect to ws://currenthost:8000/ws
+    -- In production the server runs on port 8000
+    wsUrl :: MisoString
+    wsUrl = "ws://localhost:8000/ws"
+
     pieceTiles ActivePiece{..} = (+ pos) . rotate rotation <$> shape piece
+
     fixPiece = do
         Model{current, next} <- get
         #pile %= addToGrid current.piece (pieceTiles current)
@@ -171,6 +207,7 @@ grid foreignStoreId levelRef m0 =
         fanout #current #next .= first newPiece (FLQ.shift next' next)
         removed <- #pile %%= removeCompletedLines
         #lineCount += removed
+
     tryMove f = tryEdit . (#pos %~ f) =<< use #current
     tryRotate f = tryEdit . (\p -> p & #rotation %~ f p.piece) =<< use #current
     tryEdit p = do
@@ -182,6 +219,36 @@ grid foreignStoreId levelRef m0 =
             . (.unwrap)
             . traverse (Validation . first All . lookupGrid g . (+ p.pos) . rotate p.rotation)
             $ shape p.piece
+
+    -- Handle a command received over WebSocket.
+    handleCommand GetBoardState = do
+        m <- get
+        ws <- use #websocket
+        WS.sendJSON ws (mkBoardStateResponse m)
+    handleCommand (PlacePiece px py rot) = do
+        over <- use #gameOver
+        if over
+            then do
+                ws <- use #websocket
+                WS.sendJSON ws (PlaceError "Game is over")
+            else do
+                pile <- use #pile
+                currentPiece <- use #current
+                let targetPiece = currentPiece{pos = V2 px py, rotation = rot}
+                if pieceFits pile targetPiece
+                    then do
+                        #current .= targetPiece
+                        fixPiece
+                        -- Check game over: does the new current piece collide?
+                        newGameOver <- uncurry intersectsGrid . first pieceTiles <$> use (fanout #current #pile)
+                        #gameOver .= newGameOver
+                        -- Send updated board state
+                        m <- get
+                        ws <- use #websocket
+                        WS.sendJSON ws (mkBoardStateResponse m)
+                    else do
+                        ws <- use #websocket
+                        WS.sendJSON ws (PlaceError "Invalid placement: piece does not fit at the given position and rotation")
 
 sidebar ::
     (HasType (FLQ.Queue Piece) parent, HasType Level parent, HasType Word parent) =>
@@ -257,8 +324,8 @@ dummyKeyHandler keyTopic =
         { subs = [keyboardSub $ Right . IntSet.toList]
         }
 
-app :: Word32 -> IORef Level -> Model -> Component parent (FLQ.Queue Piece, Level, Word) MisoString
-app foreignStoreId levelRef m =
+app :: Word32 -> Model -> Component parent (FLQ.Queue Piece, Level, Word) MisoString
+app foreignStoreId m =
     component
         (m.next, m.level, m.lineCount)
         (io_ . consoleLog)
@@ -267,7 +334,7 @@ app foreignStoreId levelRef m =
                 []
                 [ div_
                     []
-                    [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId levelRef m]
+                    [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId m]
                     , div_ [id_ "sidebar"] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
                     ]
                 , div_
