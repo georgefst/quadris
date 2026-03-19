@@ -156,8 +156,9 @@ serverInstructions =
     Pieces spawn at the top-centre (column 4, row 0). \
     \
     The 7 standard Tetris pieces are: O, I, S, Z, L, J, T. \
-    Each piece can be rotated: NoRotation, Rotation90, Rotation180, Rotation270. \
-    The 'pos' field in a placement command specifies where the piece's origin cell lands. \
+    Each piece can be rotated clockwise: NoRotation (0°), Rotation90 (90° CW), \
+    Rotation180 (180°), Rotation270 (270° CW). Rotations are applied to each cell's \
+    shape coordinates around the origin before offsetting by the placement position. \
     \
     Workflow: \
     1. Call 'get_board_state' to see the current pile, active piece, and preview queue. \
