@@ -34,11 +34,6 @@
                     [
                       p.wasi32
                     ];
-                modules = [
-                  ({ pkgs, ... }: final.lib.mkIf pkgs.stdenv.hostPlatform.isWasm {
-                    packages.quadris.components.exes.quadris-server.buildable = final.lib.mkForce false;
-                  })
-                ];
                 shell.nativeBuildInputs =
                   [
                     (
