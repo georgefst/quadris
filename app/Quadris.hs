@@ -20,7 +20,7 @@ import Linear (V2 (V2))
 import Miso.Aeson
 import Miso.CSS (Color)
 import Miso.CSS qualified as MS
-import Miso.JSON (FromJSON, ToJSON)
+import Miso.JSON (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
 import Miso.String (MisoString, ToMisoString)
 import System.Random.Stateful hiding (next, random)
 import Util
@@ -209,9 +209,18 @@ liftRandomiser r = do
 data Command
     = PlacePiece {x :: Int, y :: Int, rotation :: Rotation}
     | GetBoardState
-    deriving stock (Generic)
-    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically Command
-    deriving (FromJSON, ToJSON) via (MisoAeson Command)
+
+instance FromJSON Command where
+    parseJSON = withObject "Command" \o -> do
+        tag <- o .: "tag"
+        case (tag :: MisoString) of
+            "PlacePiece" -> PlacePiece <$> o .: "x" <*> o .: "y" <*> o .: "rotation"
+            "GetBoardState" -> pure GetBoardState
+            _ -> fail "Unknown command tag"
+
+instance ToJSON Command where
+    toJSON GetBoardState = object ["tag" .= ("GetBoardState" :: MisoString)]
+    toJSON (PlacePiece px py rot) = object ["tag" .= ("PlacePiece" :: MisoString), "x" .= px, "y" .= py, "rotation" .= rot]
 
 -- | The response sent back to the server over WebSocket after a command.
 data Response
@@ -223,9 +232,26 @@ data Response
         , lineCount :: Word
         }
     | PlaceError {reason :: MisoString}
-    deriving stock (Generic)
-    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically Response
-    deriving (FromJSON, ToJSON) via (MisoAeson Response)
+
+instance ToJSON Response where
+    toJSON (PlaceError r) = object ["tag" .= ("PlaceError" :: MisoString), "reason" .= r]
+    toJSON BoardState{..} =
+        object
+            [ "tag" .= ("BoardState" :: MisoString)
+            , "board" .= board
+            , "currentPiece" .= currentPiece
+            , "preview" .= preview
+            , "gameOver" .= gameOver
+            , "lineCount" .= lineCount
+            ]
+
+instance FromJSON Response where
+    parseJSON = withObject "Response" \o -> do
+        tag <- o .: "tag"
+        case (tag :: MisoString) of
+            "BoardState" -> BoardState <$> o .: "board" <*> o .: "currentPiece" <*> o .: "preview" <*> o .: "gameOver" <*> o .: "lineCount"
+            "PlaceError" -> PlaceError <$> o .: "reason"
+            _ -> fail "Unknown response tag"
 
 -- | Info about the current active piece.
 data PieceInfo = PieceInfo
@@ -235,8 +261,8 @@ data PieceInfo = PieceInfo
     , rotation :: MisoString
     }
     deriving stock (Generic)
-    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically PieceInfo
-    deriving (FromJSON, ToJSON) via (MisoAeson PieceInfo)
+instance FromJSON PieceInfo
+instance ToJSON PieceInfo
 
 -- | Serialize a piece to its string name.
 pieceName :: Piece -> MisoString

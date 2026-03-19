@@ -226,8 +226,8 @@ grid foreignStoreId m0 =
         ws <- use #websocket
         WS.sendJSON ws (mkBoardStateResponse m)
     handleCommand (PlacePiece px py rot) = do
-        over <- use #gameOver
-        if over
+        isOver <- use #gameOver
+        if isOver
             then do
                 ws <- use #websocket
                 WS.sendJSON ws (PlaceError "Game is over")
