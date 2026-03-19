@@ -142,8 +142,12 @@ grid foreignStoreId m0 =
                 WS.sendJSON ws (mkBoardStateResponse m)
             WsClosed _ -> do
                 #websocket .= WS.emptyWebSocket
-                io_ $ consoleLog "WebSocket closed"
-            WsError err -> io_ $ consoleLog ("WebSocket error: " <> err)
+                io_ $ consoleLog "WebSocket closed, reconnecting in 1s..."
+                io $ do
+                    liftIO $ threadDelay' 1
+                    pure WsConnect
+            WsError err -> do
+                io_ $ consoleLog ("WebSocket error: " <> err)
             WsCommand cmd -> handleCommand cmd
             KeyAction MoveLeft -> void $ tryMove (- V2 1 0)
             KeyAction MoveRight -> void $ tryMove (+ V2 1 0)
