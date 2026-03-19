@@ -85,6 +85,67 @@
           })
         ];
         pkgs = import nixpkgs { inherit system overlays; inherit (haskell-nix) config; };
+        flake = pkgs.myHaskellProject.flake { };
       in
-      pkgs.myHaskellProject.flake { });
+      flake // {
+        devShells = flake.devShells // {
+          default =
+            let
+              haskellNixShell = flake.devShells.default;
+              # The haskell.nix shell with crossPlatforms leaks cross-target
+              # library paths (e.g. wasm32 compiler-rt's libgcc.a, libffi-wasm)
+              # into NIX_LDFLAGS and NIX_CFLAGS_COMPILE via propagatedBuildInputs,
+              # breaking native x86_64 linking. The cross toolchains don't need
+              # these — they use their own suffixed env vars.
+              #
+              # We wrap the shell to strip cross-target paths from these vars.
+              # This runs as part of the setup hook, so it works even with
+              # `nix develop -c`.
+              sanitizeEnvHook = pkgs.makeSetupHook { name = "sanitize-cross-env"; } (
+                pkgs.writeText "sanitize-cross-env.sh" ''
+                  _stripCrossLdFlags() {
+                    echo "$1" | tr ' ' '\n' | grep -v 'wasm\|aarch64-unknown\|unknown-linux-musl\|musl-iconv' | tr '\n' ' ' | xargs
+                  }
+                  _stripCrossCFlags() {
+                    local input="$1" result="" skip=0
+                    for arg in $input; do
+                      if [ "$skip" = 1 ]; then
+                        skip=0
+                        if echo "$arg" | grep -q 'wasm\|aarch64-unknown\|unknown-linux-musl\|musl-iconv'; then
+                          continue
+                        fi
+                        result="$result -isystem $arg"
+                        continue
+                      fi
+                      if [ "$arg" = "-isystem" ]; then
+                        skip=1
+                        continue
+                      fi
+                      result="$result $arg"
+                    done
+                    echo "$result" | xargs
+                  }
+                  sanitizeCrossEnv() {
+                    for var in NIX_LDFLAGS NIX_LDFLAGS_FOR_TARGET; do
+                      if [ -n "''${!var:-}" ]; then
+                        export "$var=$(_stripCrossLdFlags "''${!var}")"
+                      fi
+                    done
+                    for var in NIX_CFLAGS_COMPILE NIX_CFLAGS_COMPILE_FOR_TARGET; do
+                      if [ -n "''${!var:-}" ]; then
+                        export "$var=$(_stripCrossCFlags "''${!var}")"
+                      fi
+                    done
+                  }
+                  postHooks+=(sanitizeCrossEnv)
+                ''
+              );
+            in
+            pkgs.mkShell {
+              inputsFrom = [ haskellNixShell ];
+              nativeBuildInputs = [ sanitizeEnvHook ];
+              shellHook = haskellNixShell.shellHook or "";
+            };
+        };
+      });
 }
