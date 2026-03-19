@@ -69,6 +69,8 @@ executable quadris-server
     import: common
     main-is: Main.hs
     hs-source-dirs: server
+    ghc-options:
+        -threaded
     if os(wasi)
         buildable: False
     else
