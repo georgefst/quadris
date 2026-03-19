@@ -55,9 +55,12 @@
                         '';
                         # The wasm RTS's package config doesn't include libffi's
                         # include/lib dirs (unlike native GHC), so the wasm C
-                        # compiler can't find ffi.h or -lffi. Provide them
-                        # explicitly via GHC options.
-                        libffi-wasm = pkgs.pkgsCross.wasi32.libffi;
+                        # compiler can't find ffi.h or -lffi. Get the libffi-wasm
+                        # that haskell.nix already built for the cross GHC
+                        # (not pkgs.pkgsCross.wasi32.libffi, which would try to
+                        # rebuild libffi from source and fail).
+                        wasmGhc = pkgs.pkgsCross.wasi32.buildPackages.haskell-nix.compiler.ghc9141;
+                        libffi-wasm = builtins.head wasmGhc.drvAttrs.depsTargetTarget;
                       in
                       pkgs.writeShellScriptBin "wasm32-unknown-wasi-cabal" ''
                         LD_LIBRARY_PATH="${wasm-dummy-liblibdl}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
@@ -69,7 +72,7 @@
                           --with-compiler=wasm32-unknown-wasi-ghc \
                           --with-ghc-pkg=wasm32-unknown-wasi-ghc-pkg \
                           --with-hsc2hs=wasm32-unknown-wasi-hsc2hs \
-                          --ghc-options="-optc-I${libffi-wasm.dev}/include -optl-L${libffi-wasm}/lib" \
+                          --ghc-options="-optc-I${libffi-wasm.dev}/include -optl-L${libffi-wasm.out}/lib" \
                           $(builtin type -P "wasm32-unknown-wasi-pkg-config" &> /dev/null && echo "--with-pkg-config=wasm32-unknown-wasi-pkg-config") \
                           "$@"
                       ''
