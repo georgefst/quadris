@@ -46,16 +46,30 @@
                             mkdir -p $out/lib
                             echo 'void __liblibdl_stub(void) {}' | wasm32-unknown-wasi-cc -shared -x c - -o $out/lib/liblibdl.so 2>/dev/null
                           '';
+                        # Cabal 3.16 resolves `ghc-pkg` via PATH for its internal
+                        # `ghc-pkg dump --global`, ignoring `--with-ghc-pkg`. Create
+                        # a `ghc-pkg` shim that delegates to the wasm one so cabal
+                        # finds it first on PATH.
+                        ghc-pkg-shim = pkgs.writeShellScriptBin "ghc-pkg" ''
+                          exec wasm32-unknown-wasi-ghc-pkg "$@"
+                        '';
+                        # The wasm RTS's package config doesn't include libffi's
+                        # include/lib dirs (unlike native GHC), so the wasm C
+                        # compiler can't find ffi.h or -lffi. Provide them
+                        # explicitly via GHC options.
+                        libffi-wasm = pkgs.pkgsCross.wasi32.libffi;
                       in
                       pkgs.writeShellScriptBin "wasm32-unknown-wasi-cabal" ''
                         LD_LIBRARY_PATH="${wasm-dummy-liblibdl}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
                         NIX_LDFLAGS=$(echo "$NIX_LDFLAGS" | tr ' ' '\n' | grep -v 'libffi-[0-9]' | tr '\n' ' ') \
                         NIX_LDFLAGS_FOR_TARGET=$(echo "$NIX_LDFLAGS_FOR_TARGET" | tr ' ' '\n' | grep -v 'libffi-[0-9]' | tr '\n' ' ') \
+                        PATH="${ghc-pkg-shim}/bin:$PATH" \
                         exec cabal \
                           --with-ghc=wasm32-unknown-wasi-ghc \
                           --with-compiler=wasm32-unknown-wasi-ghc \
                           --with-ghc-pkg=wasm32-unknown-wasi-ghc-pkg \
                           --with-hsc2hs=wasm32-unknown-wasi-hsc2hs \
+                          --ghc-options="-optc-I${libffi-wasm.dev}/include -optl-L${libffi-wasm}/lib" \
                           $(builtin type -P "wasm32-unknown-wasi-pkg-config" &> /dev/null && echo "--with-pkg-config=wasm32-unknown-wasi-pkg-config") \
                           "$@"
                       ''
