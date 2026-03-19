@@ -2,13 +2,11 @@
   description = "Basic Haskell flake";
   inputs.haskell-nix.url = "github:input-output-hk/haskell.nix";
   inputs.nixpkgs.follows = "haskell-nix/nixpkgs-2511";
-  inputs.nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.hls = { url = "github:haskell/haskell-language-server/fourmolu-ghc-9.14"; flake = false; };
-  inputs.simple-http-server = { url = "github:TheWaWaR/simple-http-server/e79ddd3cd12db97062b4a33adc2e436d0022f4be"; flake = false; };
   inputs.browser-wasi-shim = { url = "https://registry.npmjs.org/@bjorn3/browser_wasi_shim/-/browser_wasi_shim-0.3.0.tgz"; flake = false; };
   inputs.ws = { url = "https://registry.npmjs.org/ws/-/ws-8.18.0.tgz"; flake = false; };
-  outputs = inputs@{ self, nixpkgs, nixpkgs-unstable, flake-utils, haskell-nix, ... }:
+  outputs = inputs@{ self, nixpkgs, flake-utils, haskell-nix, ... }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-darwin" ] (system:
       let
         overlays = [
@@ -33,17 +31,16 @@
                 evalSystem = "x86_64-linux";
                 crossPlatforms = p:
                   final.lib.optionals final.stdenv.hostPlatform.isx86_64
-                    ([
+                    [
                       p.wasi32
-                    ] ++ final.lib.optionals final.stdenv.hostPlatform.isLinux
-                      [
-                        p.musl64
-                        p.aarch64-multiplatform
-                      ]
-                    );
+                    ];
+                modules = [
+                  ({ pkgs, ... }: final.lib.mkIf pkgs.stdenv.hostPlatform.isWasm {
+                    packages.quadris.components.exes.quadris-server.buildable = final.lib.mkForce false;
+                  })
+                ];
                 shell.nativeBuildInputs =
                   [
-                    pkgs.simple-http-server
                     (
                       let
                         wasm-dummy-liblibdl = pkgs.runCommand "liblibdl"
@@ -90,19 +87,6 @@
                     export NODE_PATH="${node_modules}''${NODE_PATH:+:$NODE_PATH}"
                   '';
               };
-          })
-          # https://github.com/TheWaWaR/simple-http-server/issues/11#issuecomment-4075592693
-          (final: prev: with (import nixpkgs-unstable { inherit system; }); {
-            simple-http-server = callPackage "${nixpkgs-unstable}/pkgs/by-name/si/simple-http-server/package.nix" {
-              rustPlatform = rustPlatform // {
-                buildRustPackage = args: rustPlatform.buildRustPackage (finalAttrs: args finalAttrs // {
-                  version = "0.8.0";
-                  src = inputs.simple-http-server;
-                  cargoHash = "sha256-Ji43cp/+fEJ+z0mTIS/CnId1JP9xk9Ti0CwRRKY2saE=";
-                  buildFeatures = [ "tls" ];
-                });
-              };
-            };
           })
         ];
         pkgs = import nixpkgs { inherit system overlays; inherit (haskell-nix) config; };

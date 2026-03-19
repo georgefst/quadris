@@ -27,4 +27,4 @@ optim: build
 	wasm-tools strip -o dist/app.wasm dist/app.wasm
 
 serve: build
-	simple-http-server dist --index --nocache --open -t $(shell nproc) -p $(PORT)
+	cabal run quadris-server -- dist $(PORT)

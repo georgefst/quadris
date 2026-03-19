@@ -5,15 +5,7 @@ license-file: LICENSE
 author: George Thomas
 maintainer: georgefsthomas@gmail.com
 
-executable quadris
-    main-is: Main.hs
-    hs-source-dirs: app
-    other-modules:
-        Quadris
-        Quadris.Miso
-        Util
-        Util.FixedLengthQueue
-        Util.Shuffle
+common common
     default-language: GHC2024
     default-extensions:
         BlockArguments
@@ -58,9 +50,38 @@ executable quadris
         text,
         time,
         unordered-containers,
+
+executable quadris
+    import: common
+    main-is: Main.hs
+    hs-source-dirs: app
+    other-modules:
+        Quadris
+        Quadris.Miso
+        Util
+        Util.FixedLengthQueue
+        Util.Shuffle
     if os(wasi)
         ghc-options:
             -no-hs-main -optl-mexec-model=reactor
+
+executable quadris-server
+    import: common
+    main-is: Main.hs
+    hs-source-dirs: server
+    if os(wasi)
+        buildable: False
     else
-        ghc-options:
-            -threaded
+        build-depends:
+            bytestring,
+            http-media,
+            mcp-types,
+            mcp,
+            servant-auth-server,
+            servant-server,
+            servant,
+            transformers,
+            wai,
+            wai-app-static,
+            warp,
+            websockets,

@@ -616,22 +616,6 @@
         "type": "github"
       }
     },
-    "nixpkgs-unstable_2": {
-      "locked": {
-        "lastModified": 1773597492,
-        "narHash": "sha256-hQ284SkIeNaeyud+LS0WVLX+WL2rxcVZLFEaK0e03zg=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "a07d4ce6bee67d7c838a8a5796e75dff9caa21ef",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "old-ghc-nix": {
       "flake": false,
       "locked": {
@@ -659,26 +643,7 @@
           "haskell-nix",
           "nixpkgs-2511"
         ],
-        "nixpkgs-unstable": "nixpkgs-unstable_2",
-        "simple-http-server": "simple-http-server",
         "ws": "ws"
-      }
-    },
-    "simple-http-server": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1773758967,
-        "narHash": "sha256-u4aS97fXux/ZBNnnU9VBLkOg9vWS+MIAFxJYi02O8oE=",
-        "owner": "TheWaWaR",
-        "repo": "simple-http-server",
-        "rev": "e79ddd3cd12db97062b4a33adc2e436d0022f4be",
-        "type": "github"
-      },
-      "original": {
-        "owner": "TheWaWaR",
-        "repo": "simple-http-server",
-        "rev": "e79ddd3cd12db97062b4a33adc2e436d0022f4be",
-        "type": "github"
       }
     },
     "stackage": {
