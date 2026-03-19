@@ -85,5 +85,6 @@ executable quadris-server
             transformers,
             wai,
             wai-app-static,
+            wai-websockets,
             warp,
             websockets,
