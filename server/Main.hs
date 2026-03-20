@@ -150,39 +150,51 @@ mkMCPApp bridge = do
 
 serverInstructions :: T.Text
 serverInstructions =
-    """
-    You are playing Tetris (Georgefstris). The game board is a 10-wide by 18-tall grid. \
-    Columns are numbered 0-9 (left to right), rows 0-17 (top to bottom). \
-    Pieces spawn at the top-centre (column 4, row 0). \
-    \
-    The 7 standard Tetris pieces are: O, I, S, Z, L, J, T. \
-    Each piece can be rotated clockwise: NoRotation (0°), Rotation90 (90° CW), \
-    Rotation180 (180°), Rotation270 (270° CW). \
-    \
-    Workflow: \
-    1. Call 'get_board_state' to see the current pile, active piece, and preview queue. \
-    2. Decide where to place the current piece. \
-    3. Call 'place_piece' with the desired column (x), row (y), and rotation. \
-       The piece will be dropped and locked in place if the position is valid. \
-       If invalid (collision or out of bounds), the call fails and the piece remains. \
-    4. Repeat. The game ends when a new piece cannot spawn without colliding. \
-    \
-    Tips: \
-    - Clear lines by filling entire rows. \
-    - The preview queue shows upcoming pieces - plan ahead. \
-    - Row 0 is the top of the board. Higher row numbers are lower on screen. \
-    - The (x, y) in place_piece is where the piece's pivot cell lands. Each \
-      piece is defined as a set of (dx, dy) offsets; one of them is always (0,0), \
-      the pivot. The final board cells occupied are (x + dx', y + dy') for each \
-      offset after rotation. To rotate an offset (dx, dy) clockwise: \
-      NoRotation -> (dx, dy), Rotation90 -> (dy, -dx), \
-      Rotation180 -> (-dx, -dy), Rotation270 -> (-dy, dx). \
-    - Piece shapes (offsets at NoRotation): \
-      O: (0,0),(0,1),(1,0),(1,1)  I: (-1,0),(0,0),(1,0),(2,0) \
-      S: (-1,1),(0,0),(0,1),(1,0)  Z: (-1,0),(0,0),(0,1),(1,1) \
-      L: (-1,0),(-1,1),(0,0),(1,0)  J: (-1,0),(0,0),(1,0),(1,1) \
-      T: (-1,0),(0,0),(0,1),(1,0)
-    """
+    T.unlines
+        [ "You are playing Tetris (Georgefstris)."
+        , ""
+        , "== Board =="
+        , "10 columns (x: 0-9, left to right) by 18 rows (y: 0-17, top to bottom)."
+        , "Row 0 is the top. Higher y values are lower on screen."
+        , ""
+        , "== Pieces =="
+        , "The 7 standard pieces: O, I, S, Z, L, J, T."
+        , "Rotations: NoRotation, Rotation90, Rotation180, Rotation270 (clockwise)."
+        , ""
+        , "== How placement works =="
+        , "When you call place_piece(x, y, rotation):"
+        , "  1. Take the piece's cell offsets (listed below as (dx, dy) pairs)."
+        , "  2. Apply rotation to each offset:"
+        , "       NoRotation:  (dx, dy) -> (dx, dy)"
+        , "       Rotation90:  (dx, dy) -> (dy, -dx)"
+        , "       Rotation180: (dx, dy) -> (-dx, -dy)"
+        , "       Rotation270: (dx, dy) -> (-dy, dx)"
+        , "  3. Add the placement position: final cell = (x + dx', y + dy')."
+        , "  4. All final cells must be empty and within bounds (x: 0-9, y: 0-17)."
+        , "     Cells above the top (y < 0) are allowed."
+        , "  5. If valid, the piece locks, completed rows clear, and the next piece spawns."
+        , ""
+        , "== Cell offsets at NoRotation (dx, dy) =="
+        , "Each piece always includes the pivot cell (0,0)."
+        , "  O: (0,0), (0,1), (1,0), (1,1)"
+        , "  I: (-1,0), (0,0), (1,0), (2,0)"
+        , "  S: (-1,1), (0,0), (0,1), (1,0)"
+        , "  Z: (-1,0), (0,0), (0,1), (1,1)"
+        , "  L: (-1,0), (-1,1), (0,0), (1,0)"
+        , "  J: (-1,0), (0,0), (1,0), (1,1)"
+        , "  T: (-1,0), (0,0), (0,1), (1,0)"
+        , ""
+        , "== Workflow =="
+        , "1. Call get_board_state to see the board, current piece, and preview queue."
+        , "2. Decide where to place the current piece."
+        , "3. Call place_piece with column (x), row (y), and rotation."
+        , "4. Repeat. The game ends when a new piece cannot spawn."
+        , ""
+        , "== Tips =="
+        , "- Clear lines by filling entire rows."
+        , "- The preview queue shows upcoming pieces - plan ahead."
+        , "- Pieces spawn at column 4, row 0."
+        ]
 
 serverCapabilities :: ServerCapabilities
 serverCapabilities =
