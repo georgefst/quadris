@@ -229,7 +229,7 @@ grid foreignStoreId m0 =
         m <- get
         ws <- use #websocket
         WS.sendJSON ws (mkBoardStateResponse m)
-    handleCommand (PlacePiece px py rot) = do
+    handleCommand (PlacePiece px rot) = do
         isOver <- use #gameOver
         if isOver
             then do
@@ -238,10 +238,16 @@ grid foreignStoreId m0 =
             else do
                 pile <- use #pile
                 currentPiece <- use #current
-                let targetPiece = currentPiece{pos = V2 px py, rotation = rot}
-                if pieceFits pile targetPiece
+                -- Place at column px with rotation rot, starting from the top (row 0)
+                let spawnPiece = currentPiece{pos = V2 px 0, rotation = rot}
+                if not (pieceFits pile spawnPiece)
                     then do
-                        #current .= targetPiece
+                        ws <- use #websocket
+                        WS.sendJSON ws (PlaceError "Invalid placement: piece does not fit at the given column and rotation")
+                    else do
+                        -- Drop the piece as far down as it can go
+                        let dropped = while (pieceFits pile) (#pos %~ (+ V2 0 1)) spawnPiece
+                        #current .= dropped
                         fixPiece
                         -- Check game over: does the new current piece collide?
                         newGameOver <- uncurry intersectsGrid . first pieceTiles <$> use (fanout #current #pile)
@@ -250,9 +256,6 @@ grid foreignStoreId m0 =
                         m <- get
                         ws <- use #websocket
                         WS.sendJSON ws (mkBoardStateResponse m)
-                    else do
-                        ws <- use #websocket
-                        WS.sendJSON ws (PlaceError "Invalid placement: piece does not fit at the given position and rotation")
 
 sidebar ::
     (HasType (FLQ.Queue Piece) parent, HasType Level parent, HasType Word parent) =>

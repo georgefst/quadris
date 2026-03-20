@@ -207,20 +207,20 @@ liftRandomiser r = do
 
 -- | A command received from the server over WebSocket.
 data Command
-    = PlacePiece {x :: Int, y :: Int, rotation :: Rotation}
+    = PlacePiece {x :: Int, rotation :: Rotation}
     | GetBoardState
 
 instance FromJSON Command where
     parseJSON = withObject "Command" \o -> do
         tag <- o .: "tag"
         case (tag :: MisoString) of
-            "PlacePiece" -> PlacePiece <$> o .: "x" <*> o .: "y" <*> o .: "rotation"
+            "PlacePiece" -> PlacePiece <$> o .: "x" <*> o .: "rotation"
             "GetBoardState" -> pure GetBoardState
             _ -> fail "Unknown command tag"
 
 instance ToJSON Command where
     toJSON GetBoardState = object ["tag" .= ("GetBoardState" :: MisoString)]
-    toJSON (PlacePiece px py rot) = object ["tag" .= ("PlacePiece" :: MisoString), "x" .= px, "y" .= py, "rotation" .= rot]
+    toJSON (PlacePiece px rot) = object ["tag" .= ("PlacePiece" :: MisoString), "x" .= px, "rotation" .= rot]
 
 -- | The response sent back to the server over WebSocket after a command.
 data Response

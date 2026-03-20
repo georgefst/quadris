@@ -202,19 +202,19 @@ placePieceTool bridge =
     toolHandler
         "place_piece"
         ( Just $ T.unlines
-            [ "Place the current piece at (x, y) with the given rotation, locking it immediately."
+            [ "Drop the current piece at column x with the given rotation."
+            , "The piece spawns at the top of the board and falls to the lowest valid row"
+            , "(like a hard drop). You choose column and rotation; gravity handles the rest."
             , ""
-            , "(x, y) is where the pivot cell lands. Each piece is defined by (dx, dy) offsets"
-            , "relative to the pivot (which is always (0,0)). To compute the final board cells:"
-            , "  1. Apply rotation to each offset (dx, dy):"
-            , "       NoRotation:  (dx, dy) -> (dx, dy)"
-            , "       Rotation90:  (dx, dy) -> (dy, -dx)"
-            , "       Rotation180: (dx, dy) -> (-dx, -dy)"
-            , "       Rotation270: (dx, dy) -> (-dy, dx)"
-            , "  2. Add placement position: final cell = (x + dx', y + dy')."
-            , "  3. All final cells must be on empty squares. x must be 0-9. y < 0 is allowed."
+            , "Each piece is defined by (dx, dy) offsets relative to a pivot cell at (0,0)."
+            , "dx is column offset, dy is row offset. The pivot lands at column x."
+            , "To compute the rotated offsets from the base shapes:"
+            , "  NoRotation:  (dx, dy) -> (dx, dy)"
+            , "  Rotation90:  (dx, dy) -> (dy, -dx)"
+            , "  Rotation180: (dx, dy) -> (-dx, -dy)"
+            , "  Rotation270: (dx, dy) -> (-dy, dx)"
             , ""
-            , "Cell offsets at NoRotation (dx, dy) — dx is column offset, dy is row offset:"
+            , "Cell offsets at NoRotation (dx, dy):"
             , "  O: (0,0), (0,1), (1,0), (1,1)"
             , "  I: (-1,0), (0,0), (1,0), (2,0)"
             , "  S: (-1,1), (0,0), (0,1), (1,0)"
@@ -223,7 +223,8 @@ placePieceTool bridge =
             , "  J: (-1,0), (0,0), (1,0), (1,1)"
             , "  T: (-1,0), (0,0), (0,1), (1,0)"
             , ""
-            , "On success: completed rows clear, next piece spawns, updated board state is returned."
+            , "On success: piece locks at the lowest valid row, completed rows clear,"
+            , "next piece spawns, updated board state is returned."
             , "On failure: error message returned, piece remains unplaced."
             ]
         )
@@ -231,24 +232,21 @@ placePieceTool bridge =
             "object"
             ( Just $
                 Map.fromList
-                    [ ("x", object ["type" .= ("integer" :: T.Text), "description" .= ("Column position (0-9, left to right)" :: T.Text)])
-                    , ("y", object ["type" .= ("integer" :: T.Text), "description" .= ("Row position (0-17, top to bottom)" :: T.Text)])
-                    , ("rotation", object ["type" .= ("string" :: T.Text), "enum" .= (["NoRotation", "Rotation90", "Rotation180", "Rotation270"] :: [T.Text]), "description" .= ("Rotation to apply to the piece" :: T.Text)])
+                    [ ("x", object ["type" .= ("integer" :: T.Text), "description" .= ("Column to drop the piece in (0-9, left to right)" :: T.Text)])
+                    , ("rotation", object ["type" .= ("string" :: T.Text), "enum" .= (["NoRotation", "Rotation90", "Rotation180", "Rotation270"] :: [T.Text]), "description" .= ("Rotation to apply to the piece before dropping" :: T.Text)])
                     ]
             )
-            (Just ["x", "y", "rotation"])
+            (Just ["x", "rotation"])
         )
         \args -> do
             let mx = args >>= Map.lookup "x" >>= asInt
-            let my = args >>= Map.lookup "y" >>= asInt
             let mrot = args >>= Map.lookup "rotation" >>= asText
-            case (mx, my, mrot) of
-                (Just px, Just py, Just rot) -> do
+            case (mx, mrot) of
+                (Just px, Just rot) -> do
                     let cmd =
                             object
                                 [ "tag" .= ("PlacePiece" :: T.Text)
                                 , "x" .= px
-                                , "y" .= py
                                 , "rotation" .= rot
                                 ]
                     result <- liftIO $ sendCommandToFrontend bridge cmd
@@ -256,7 +254,7 @@ placePieceTool bridge =
                         Left err -> pure $ ProcessSuccess $ toolTextError err
                         Right val -> pure $ ProcessSuccess $ toolTextResult [jsonToText val]
                 _ ->
-                    pure $ ProcessSuccess $ toolTextError "Invalid arguments: 'x' (integer), 'y' (integer), and 'rotation' (string) are required"
+                    pure $ ProcessSuccess $ toolTextError "Invalid arguments: 'x' (integer) and 'rotation' (string) are required"
 
 -- | Render a JSON Value as Text for tool output.
 jsonToText :: Value -> T.Text
