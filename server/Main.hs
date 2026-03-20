@@ -143,58 +143,10 @@ mkMCPApp bridge = do
                 Nothing -- no finalize hook
                 serverCapabilities
                 (Implementation "georgefstris" "0.1.0" Nothing)
-                (Just serverInstructions)
+                Nothing
                 (handlers bridge)
     stateVar <- newMVar initialState
     pure $ simpleHttpApp stateVar
-
-serverInstructions :: T.Text
-serverInstructions =
-    T.unlines
-        [ "You are playing Tetris (Georgefstris)."
-        , ""
-        , "== Board =="
-        , "10 columns (x: 0-9, left to right) by 18 rows (y: 0-17, top to bottom)."
-        , "Row 0 is the top. Higher y values are lower on screen."
-        , ""
-        , "== Pieces =="
-        , "The 7 standard pieces: O, I, S, Z, L, J, T."
-        , "Rotations: NoRotation, Rotation90, Rotation180, Rotation270 (clockwise)."
-        , ""
-        , "== How placement works =="
-        , "When you call place_piece(x, y, rotation):"
-        , "  1. Take the piece's cell offsets (listed below as (dx, dy) pairs)."
-        , "  2. Apply rotation to each offset:"
-        , "       NoRotation:  (dx, dy) -> (dx, dy)"
-        , "       Rotation90:  (dx, dy) -> (dy, -dx)"
-        , "       Rotation180: (dx, dy) -> (-dx, -dy)"
-        , "       Rotation270: (dx, dy) -> (-dy, dx)"
-        , "  3. Add the placement position: final cell = (x + dx', y + dy')."
-        , "  4. All final cells must be empty and within bounds (x: 0-9, y: 0-17)."
-        , "     Cells above the top (y < 0) are allowed."
-        , "  5. If valid, the piece locks, completed rows clear, and the next piece spawns."
-        , ""
-        , "== Cell offsets at NoRotation (dx, dy) =="
-        , "Each piece always includes the pivot cell (0,0)."
-        , "  O: (0,0), (0,1), (1,0), (1,1)"
-        , "  I: (-1,0), (0,0), (1,0), (2,0)"
-        , "  S: (-1,1), (0,0), (0,1), (1,0)"
-        , "  Z: (-1,0), (0,0), (0,1), (1,1)"
-        , "  L: (-1,0), (-1,1), (0,0), (1,0)"
-        , "  J: (-1,0), (0,0), (1,0), (1,1)"
-        , "  T: (-1,0), (0,0), (0,1), (1,0)"
-        , ""
-        , "== Workflow =="
-        , "1. Call get_board_state to see the board, current piece, and preview queue."
-        , "2. Decide where to place the current piece."
-        , "3. Call place_piece with column (x), row (y), and rotation."
-        , "4. Repeat. The game ends when a new piece cannot spawn."
-        , ""
-        , "== Tips =="
-        , "- Clear lines by filling entire rows."
-        , "- The preview queue shows upcoming pieces - plan ahead."
-        , "- Pieces spawn at column 4, row 0."
-        ]
 
 serverCapabilities :: ServerCapabilities
 serverCapabilities =
@@ -219,16 +171,21 @@ getBoardStateTool :: GameBridge -> ToolHandler
 getBoardStateTool bridge =
     toolHandler
         "get_board_state"
-        ( Just
-            """
-            Get the current Tetris board state. Returns: \
-            - 'board': a 10x18 grid where each cell is null (empty) or a piece letter (O/I/S/Z/L/J/T). \
-              Row 0 is the top, row 17 is the bottom. Column 0 is leftmost, column 9 is rightmost. \
-            - 'current_piece': the piece you must place, with its type, current position, and rotation. \
-            - 'preview': list of upcoming pieces (next in queue). \
-            - 'game_over': whether the game has ended. \
-            - 'line_count': total lines cleared so far.
-            """
+        ( Just $ T.unlines
+            [ "Get the current Tetris board state."
+            , "The board is 10 columns (x: 0-9, left to right) by 18 rows (y: 0-17, top to bottom)."
+            , "Row 0 is the top of the board. Higher y values are lower on screen."
+            , "Pieces spawn at column 4, row 0."
+            , ""
+            , "Returns a JSON object with:"
+            , "  board: 18 rows of 10 cells each. Each cell is \"\" (empty) or a piece letter (O/I/S/Z/L/J/T)."
+            , "  currentPiece: {piece, posX, posY, rotation} - the piece you must place next."
+            , "  preview: list of upcoming piece names."
+            , "  gameOver: whether the game has ended."
+            , "  lineCount: total lines cleared so far."
+            , ""
+            , "Call this first, then use place_piece (see its description for placement rules and piece shapes)."
+            ]
         )
         (InputSchema "object" Nothing Nothing)
         \_ -> do
@@ -244,22 +201,31 @@ placePieceTool :: GameBridge -> ToolHandler
 placePieceTool bridge =
     toolHandler
         "place_piece"
-        ( Just
-            """
-            Place the current Tetris piece at an exact position on the board. \
-            The piece is placed at the given (x, y) coordinates with the given rotation, \
-            then locked into the pile immediately (equivalent to a hard drop at that position). \
-            \
-            The placement must be valid: all cells of the rotated piece offset by (x, y) must \
-            land on empty cells within the 10x18 grid (or above the top, which is allowed). \
-            If the placement is invalid (collision with existing pieces or out of bounds), \
-            the call fails and the piece remains unplaced. \
-            \
-            After a successful placement, completed lines are cleared and the next piece \
-            from the preview queue becomes the current piece. \
-            \
-            Returns the updated board state on success, or an error message on failure.
-            """
+        ( Just $ T.unlines
+            [ "Place the current piece at (x, y) with the given rotation, locking it immediately."
+            , ""
+            , "(x, y) is where the pivot cell lands. Each piece is defined by (dx, dy) offsets"
+            , "relative to the pivot (which is always (0,0)). To compute the final board cells:"
+            , "  1. Apply rotation to each offset (dx, dy):"
+            , "       NoRotation:  (dx, dy) -> (dx, dy)"
+            , "       Rotation90:  (dx, dy) -> (dy, -dx)"
+            , "       Rotation180: (dx, dy) -> (-dx, -dy)"
+            , "       Rotation270: (dx, dy) -> (-dy, dx)"
+            , "  2. Add placement position: final cell = (x + dx', y + dy')."
+            , "  3. All final cells must be on empty squares. x must be 0-9. y < 0 is allowed."
+            , ""
+            , "Cell offsets at NoRotation (dx, dy) — dx is column offset, dy is row offset:"
+            , "  O: (0,0), (0,1), (1,0), (1,1)"
+            , "  I: (-1,0), (0,0), (1,0), (2,0)"
+            , "  S: (-1,1), (0,0), (0,1), (1,0)"
+            , "  Z: (-1,0), (0,0), (0,1), (1,1)"
+            , "  L: (-1,0), (-1,1), (0,0), (1,0)"
+            , "  J: (-1,0), (0,0), (1,0), (1,1)"
+            , "  T: (-1,0), (0,0), (0,1), (1,0)"
+            , ""
+            , "On success: completed rows clear, next piece spawns, updated board state is returned."
+            , "On failure: error message returned, piece remains unplaced."
+            ]
         )
         ( InputSchema
             "object"
