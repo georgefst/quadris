@@ -157,8 +157,7 @@ serverInstructions =
     \
     The 7 standard Tetris pieces are: O, I, S, Z, L, J, T. \
     Each piece can be rotated clockwise: NoRotation (0°), Rotation90 (90° CW), \
-    Rotation180 (180°), Rotation270 (270° CW). Rotations are applied to each cell's \
-    shape coordinates around the origin before offsetting by the placement position. \
+    Rotation180 (180°), Rotation270 (270° CW). \
     \
     Workflow: \
     1. Call 'get_board_state' to see the current pile, active piece, and preview queue. \
@@ -172,7 +171,13 @@ serverInstructions =
     - Clear lines by filling entire rows. \
     - The preview queue shows upcoming pieces - plan ahead. \
     - Row 0 is the top of the board. Higher row numbers are lower on screen. \
-    - Piece shapes relative to origin (all rotations apply to these coords): \
+    - The (x, y) in place_piece is where the piece's pivot cell lands. Each \
+      piece is defined as a set of (dx, dy) offsets; one of them is always (0,0), \
+      the pivot. The final board cells occupied are (x + dx', y + dy') for each \
+      offset after rotation. To rotate an offset (dx, dy) clockwise: \
+      NoRotation -> (dx, dy), Rotation90 -> (dy, -dx), \
+      Rotation180 -> (-dx, -dy), Rotation270 -> (-dy, dx). \
+    - Piece shapes (offsets at NoRotation): \
       O: (0,0),(0,1),(1,0),(1,1)  I: (-1,0),(0,0),(1,0),(2,0) \
       S: (-1,1),(0,0),(0,1),(1,0)  Z: (-1,0),(0,0),(0,1),(1,1) \
       L: (-1,0),(-1,1),(0,0),(1,0)  J: (-1,0),(0,0),(1,0),(1,1) \
