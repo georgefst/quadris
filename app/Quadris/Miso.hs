@@ -26,11 +26,12 @@ import Miso hiding (for, new, (--->), (<---), (<--->))
 import Miso.CSS qualified as MS
 import Miso.Canvas qualified as Canvas
 import Miso.Html
-import Miso.Html.Property hiding (for_)
+import Miso.Html.Property hiding (class_, for_)
 import Miso.Optics
 import Optics hiding (uncons)
 import Optics.State.Operators
 import Quadris
+import Quadris.Css qualified as C
 import Safe (predDef, succDef)
 import System.Random.Stateful hiding (next, random)
 import Util
@@ -125,8 +126,8 @@ grid foreignStoreId levelRef m0 =
             gridCanvas
                 opts.gridWidth
                 opts.gridHeight
-                ( mwhen gameOver [class_ "game-over"]
-                    <> mwhen paused [class_ "paused"]
+                ( mwhen gameOver [class_ C.gameOver]
+                    <> mwhen paused [class_ C.paused]
                 )
                 $ deconstructGrid
                     ( addToGrid (current.piece, False) (pieceTiles current)
@@ -195,7 +196,7 @@ sidebar m0 =
                 []
                 $ ( FLQ.toList pieces <&> \piece ->
                         div_
-                            [class_ "next"]
+                            [class_ C.next]
                             [ let
                                 ps = shape piece
                                 vMin = V2 (NE.minimum $ (^. lensVL _x) <$> ps) (NE.minimum $ (^. lensVL _y) <$> ps)
@@ -206,12 +207,12 @@ sidebar m0 =
                             ]
                   )
                     <> [ div_
-                            [class_ "level"]
+                            [class_ C.level]
                             [ div_ [] [text "Level:"]
                             , div_ [] [text $ ms level]
                             ]
                        , div_
-                            [class_ "line-count"]
+                            [class_ C.lineCount]
                             [ div_ [] [text "Lines cleared:"]
                             , div_ [] [text $ ms lineCount]
                             ]

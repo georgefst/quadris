@@ -4,6 +4,8 @@ version: 0.1.0.0
 license-file: LICENSE
 author: George Thomas
 maintainer: georgefsthomas@gmail.com
+extra-source-files:
+    static/style.css
 
 executable quadris
     main-is: Main.hs
@@ -11,6 +13,7 @@ executable quadris
     other-modules:
         Quadris
         Quadris.Miso
+        Quadris.Css
         Util
         Util.FixedLengthQueue
         Util.Shuffle
@@ -41,7 +44,10 @@ executable quadris
         aeson,
         colour,
         containers,
+        css-class-bindings,
+        directory,
         extra,
+        filepath,
         foreign-store,
         generic-optics,
         linear,
@@ -55,6 +61,7 @@ executable quadris
         pretty-simple,
         random,
         safe,
+        template-haskell,
         text,
         time,
         unordered-containers,
