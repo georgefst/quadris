@@ -21,7 +21,6 @@ import Data.Set qualified as Set
 import Data.Word
 import Foreign.Store
 import GHC.Generics (Generic)
-import Quadris
 import Linear (R1 (_x), R2 (_y), V2 (V2))
 import Miso hiding (for, new, (--->), (<---), (<--->))
 import Miso.CSS qualified as MS
@@ -31,6 +30,7 @@ import Miso.Html.Property hiding (for_)
 import Miso.Optics
 import Optics hiding (uncons)
 import Optics.State.Operators
+import Quadris
 import Safe (predDef, succDef)
 import System.Random.Stateful hiding (next, random)
 import Util
