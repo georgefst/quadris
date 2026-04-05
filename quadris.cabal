@@ -40,7 +40,7 @@ executable quadris
         -Wall
         -Wmissing-deriving-strategies
     build-depends:
-        base >=4.14,
+        base >= 4.14,
         aeson,
         colour,
         containers,
