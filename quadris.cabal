@@ -68,6 +68,3 @@ executable quadris
     if os(wasi)
         ghc-options:
             -no-hs-main -optl-mexec-model=reactor
-    else
-        ghc-options:
-            -threaded
