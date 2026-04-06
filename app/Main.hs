@@ -4,9 +4,9 @@ module Main (main) where
 
 import Data.IORef
 import Foreign.Store
+import Miso
 import Quadris (Opts (..), opts)
 import Quadris.Miso
-import Miso
 import System.Environment
 
 main :: IO ()
