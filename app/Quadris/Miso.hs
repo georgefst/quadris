@@ -26,7 +26,7 @@ import Miso hiding (for, new, (--->), (<---), (<--->))
 import Miso.CSS qualified as MS
 import Miso.Canvas qualified as Canvas
 import Miso.Html
-import Miso.Html.Property hiding (class_, for_)
+import Miso.Html.Property hiding (class_, for_, id_)
 import Miso.Optics
 import Optics hiding (uncons)
 import Optics.State.Operators
@@ -268,11 +268,11 @@ app foreignStoreId levelRef m =
                 []
                 [ div_
                     []
-                    [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId levelRef m]
-                    , div_ [id_ "sidebar"] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
+                    [ div_ [id_ C.Grid] ["grid" +> grid foreignStoreId levelRef m]
+                    , div_ [id_ C.Sidebar] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
                     ]
                 , div_
-                    [id_ "dummy-key-handler"]
+                    [id_ C.DummyKeyHandler]
                     ["dummy-key-handler" +> dummyKeyHandler keysPressedTopic]
                 ]
         )

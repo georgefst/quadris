@@ -1,7 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-missing-deriving-strategies #-}
 
 module Quadris.Css where
 
-import Util
+import CssClassBindings
 
 includeCss "static/style.css"

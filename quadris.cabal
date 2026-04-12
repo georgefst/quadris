@@ -44,7 +44,7 @@ executable quadris
         aeson,
         colour,
         containers,
-        css-class-bindings,
+        css-class-bindings >= 0.0.3,
         directory,
         extra,
         filepath,

@@ -7,13 +7,11 @@ import Data.Bifunctor (bimap)
 import Data.List.NonEmpty qualified as NE
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
 import Data.Tuple.Extra ((&&&))
-import Language.Haskell.TH.Syntax
 import Miso (Attribute)
 import Miso.CSS qualified as MS
 import Miso.Html.Property qualified as Miso
 import Miso.String (MisoString, ToMisoString, ms)
 import Optics (Lens', lens, (.~), (^.))
-import System.Directory
 
 (<<$>>) :: (Functor f1, Functor f2) => (a -> b) -> f1 (f2 a) -> f1 (f2 b)
 (<<$>>) = fmap . fmap
@@ -46,13 +44,8 @@ fanout l1 l2 = lens ((^. l1) &&& (^. l2)) (flip $ uncurry (.) . bimap (l1 .~) (l
 cssVar :: (ToMisoString a) => MisoString -> a -> Attribute action
 cssVar k v = MS.styleInline_ $ "--" <> k <> ": " <> ms v
 
--- TODO `css-class-bindings` library has a few problems:
--- doesn't use `addDependentFile` (fixed here)
--- only generates bindings for classes, not IDs
-includeCss :: FilePath -> Q [Dec]
-includeCss s = do
-    addDependentFile =<< liftIO (makeAbsolute s)
-    CCB.includeCss s
-
 class_ :: CCB.CssClass MisoString -> Attribute action
 class_ = Miso.class_ . CCB.class_
+
+id_ :: (CCB.CssIdentifier a) => a -> Attribute action
+id_ = Miso.id_ . CCB.id_
