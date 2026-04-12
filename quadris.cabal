@@ -54,7 +54,7 @@ executable quadris
         massiv,
         miso-aeson,
         miso-optics,
-        miso,
+        miso >= 1.9,
         mtl,
         optics-operators,
         optics,

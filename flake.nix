@@ -54,8 +54,12 @@
                             mkdir -p $out/lib
                             echo 'void __liblibdl_stub(void) {}' | wasm32-unknown-wasi-cc -shared -x c - -o $out/lib/liblibdl.so 2>/dev/null
                           '';
+                        forced-wasm-ghc-pkg = pkgs.writeShellScriptBin "ghc-pkg" ''
+                          exec wasm32-unknown-wasi-ghc-pkg "$@"
+                        '';
                       in
                       pkgs.writeShellScriptBin "wasm32-unknown-wasi-cabal" ''
+                        PATH="${forced-wasm-ghc-pkg}/bin:$PATH" \
                         LD_LIBRARY_PATH="${wasm-dummy-liblibdl}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
                         NIX_LDFLAGS=$(echo "$NIX_LDFLAGS" | tr ' ' '\n' | grep -v 'libffi-[0-9]' | tr '\n' ' ') \
                         NIX_LDFLAGS_FOR_TARGET=$(echo "$NIX_LDFLAGS_FOR_TARGET" | tr ' ' '\n' | grep -v 'libffi-[0-9]' | tr '\n' ' ') \
@@ -79,6 +83,16 @@
                       ) + "  --sha256: 0ljp9g0kq1skwdf1d8hisnwr8nmls03ailv5zb8mk6whdap6nala"
                   ;
                 };
+                modules = [{
+                  packages.miso.patches = [
+                    # https://github.com/dmjio/miso/pull/1486
+                    # incompatibility with `foreign-store`, fix merged but not in Miso 1.9
+                    (pkgs.fetchpatch {
+                      url = "https://github.com/dmjio/miso/commit/ec47c61.diff";
+                      hash = "sha256-BT58B1PH8BihMkdEpyFOI2UG/iPmSGKo0LLu+xNM1Gs=";
+                    })
+                  ];
+                }];
                 shell.withHoogle = false;
                 shell.shellHook =
                   let
