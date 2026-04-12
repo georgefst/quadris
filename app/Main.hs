@@ -2,6 +2,7 @@
 
 module Main (main) where
 
+import Data.Functor
 import Data.IORef
 import Foreign.Store
 import Miso
@@ -39,10 +40,8 @@ main = do
     -- but the unmount action doesn't get run on reload
     -- and actually, given that it can't do IO directly, we'd need a new action as well...
     levelRef <- newIORef model.level
-    let a = (app foreignStoreId levelRef model){styles = [Href ("assets/style.css#" <> cacheBuster) False]}
-    getProgName >>= \case
-        "<interactive>" -> reload defaultEvents a
-        _ -> startApp defaultEvents a
+    run <- getProgName <&> \b -> if b == "<interactive>" then reload else startApp
+    run defaultEvents (app foreignStoreId levelRef model){styles = [Href ("assets/style.css#" <> cacheBuster) False]}
 
 #ifdef wasi_HOST_OS
 -- TODO we're hitting compiler errors using these, despite the first one being straight from the GHC users' guide
