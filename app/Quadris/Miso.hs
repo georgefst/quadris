@@ -26,12 +26,11 @@ import Miso hiding (for, new, (--->), (<---), (<--->))
 import Miso.CSS qualified as MS
 import Miso.Canvas qualified as Canvas
 import Miso.Html
-import Miso.Html.Property hiding (class_, for_, id_)
+import Miso.Html.Property hiding (for_)
 import Miso.Optics
 import Optics hiding (uncons)
 import Optics.State.Operators
 import Quadris
-import Quadris.Css qualified as C
 import Safe (predDef, succDef)
 import System.Random.Stateful hiding (next, random)
 import Util
@@ -126,8 +125,8 @@ grid foreignStoreId levelRef m0 =
             gridCanvas
                 opts.gridWidth
                 opts.gridHeight
-                ( mwhen gameOver [class_ C.gameOver]
-                    <> mwhen paused [class_ C.paused]
+                ( mwhen gameOver [class_ "game-over"]
+                    <> mwhen paused [class_ "paused"]
                 )
                 $ deconstructGrid
                     ( addToGrid (current.piece, False) (pieceTiles current)
@@ -196,7 +195,7 @@ sidebar m0 =
                 []
                 $ ( FLQ.toList pieces <&> \piece ->
                         div_
-                            [class_ C.next]
+                            [class_ "next"]
                             [ let
                                 ps = shape piece
                                 vMin = V2 (NE.minimum $ (^. lensVL _x) <$> ps) (NE.minimum $ (^. lensVL _y) <$> ps)
@@ -207,12 +206,12 @@ sidebar m0 =
                             ]
                   )
                     <> [ div_
-                            [class_ C.level]
+                            [class_ "level"]
                             [ div_ [] [text "Level:"]
                             , div_ [] [text $ ms level]
                             ]
                        , div_
-                            [class_ C.lineCount]
+                            [class_ "line-count"]
                             [ div_ [] [text "Lines cleared:"]
                             , div_ [] [text $ ms lineCount]
                             ]
@@ -268,11 +267,11 @@ app foreignStoreId levelRef m =
                 []
                 [ div_
                     []
-                    [ div_ [id_ C.Grid] ["grid" +> grid foreignStoreId levelRef m]
-                    , div_ [id_ C.Sidebar] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
+                    [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId levelRef m]
+                    , div_ [id_ "sidebar"] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
                     ]
                 , div_
-                    [id_ C.DummyKeyHandler]
+                    [id_ "dummy-key-handler"]
                     ["dummy-key-handler" +> dummyKeyHandler keysPressedTopic]
                 ]
         )

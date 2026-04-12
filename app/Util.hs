@@ -2,14 +2,12 @@ module Util where
 
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import CssClassBindings qualified as CCB
 import Data.Bifunctor (bimap)
 import Data.List.NonEmpty qualified as NE
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
 import Data.Tuple.Extra ((&&&))
 import Miso (Attribute)
 import Miso.CSS qualified as MS
-import Miso.Html.Property qualified as Miso
 import Miso.String (MisoString, ToMisoString, ms)
 import Optics (Lens', lens, (.~), (^.))
 
@@ -43,9 +41,3 @@ fanout l1 l2 = lens ((^. l1) &&& (^. l2)) (flip $ uncurry (.) . bimap (l1 .~) (l
 -- TODO upstream this? with escaping, obviously
 cssVar :: (ToMisoString a) => MisoString -> a -> Attribute action
 cssVar k v = MS.styleInline_ $ "--" <> k <> ": " <> ms v
-
-class_ :: CCB.CssClass MisoString -> Attribute action
-class_ = Miso.class_ . CCB.class_
-
-id_ :: (CCB.CssIdentifier a) => a -> Attribute action
-id_ = Miso.id_ . CCB.id_

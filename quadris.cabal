@@ -13,7 +13,6 @@ executable quadris
     other-modules:
         Quadris
         Quadris.Miso
-        Quadris.Css
         Util
         Util.FixedLengthQueue
         Util.Shuffle
@@ -44,7 +43,6 @@ executable quadris
         aeson,
         colour,
         containers,
-        css-class-bindings >= 0.0.3,
         directory,
         extra,
         filepath,
