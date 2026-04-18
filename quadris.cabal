@@ -34,6 +34,7 @@ executable quadris
         OverloadedStrings
         PartialTypeSignatures
         RecordWildCards
+        RecursiveDo
         ViewPatterns
     ghc-options:
         -Wall
@@ -58,6 +59,10 @@ executable quadris
         optics,
         pretty-simple,
         random,
+        reflex-dom,
+        reflex-dom-core,
+        jsaddle,
+        jsaddle-dom,
         safe,
         template-haskell,
         text,

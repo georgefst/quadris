@@ -20,6 +20,8 @@ build:
 	cp -r --no-preserve=mode $(BROWSER_WASI_SHIM)/dist dist/browser_wasi_shim
 	$(eval my_wasm=$(shell wasm32-unknown-wasi-cabal list-bin quadris))
 	$(shell wasm32-unknown-wasi-ghc --print-libdir)/post-link.mjs --input $(my_wasm) --output dist/ghc_wasm_jsffi.js
+	# workaround for jsaddle-wasm strict mode bug: initialSyncDepth is used without declaration
+	sed -i '0,/while (true)/s//var initialSyncDepth = -1; while (true)/' dist/ghc_wasm_jsffi.js
 	cp -v $(my_wasm) dist/app.wasm
 
 optim: build
