@@ -12,6 +12,7 @@ import Data.Function
 import Data.Generics.Product
 import Data.IORef
 import Data.IntSet qualified as IntSet
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe
@@ -119,8 +120,8 @@ grid foreignStoreId levelRef m0 =
                 L; J; T -> predDef maxBound
             KeyAction SoftDrop -> void $ tryMove (+ V2 0 1)
             KeyAction HardDrop -> whileM (tryMove (+ V2 0 1)) >> fixPiece
-            KeyAction LevelDown -> setLevel $ max 1 . predDef 1
-            KeyAction LevelUp -> setLevel $ min opts.topLevel . succDef opts.topLevel
+            KeyAction LevelDown -> setLevel levelRef $ max 1 . predDef 1
+            KeyAction LevelUp -> setLevel levelRef $ min opts.topLevel . succDef opts.topLevel
             KeyAction Pause -> #paused %= not
             KeyAction Reset -> do
                 m <- get
@@ -163,30 +164,6 @@ grid foreignStoreId levelRef m0 =
             , typed <--- #lineCount
             ]
         }
-  where
-    setLevel f = do
-        l1 <- f <$> use #level
-        #level .= l1
-        io_ $ writeIORef levelRef l1
-    pieceTiles ActivePiece{..} = (+ pos) . rotate rotation <$> shape piece
-    fixPiece = do
-        Model{current, next} <- get
-        #pile %= addToGrid current.piece (pieceTiles current)
-        next' <- #random %%= flip runRandomPieces (liftRandomiser opts.randomiser)
-        fanout #current #next .= first newPiece (FLQ.shift next' next)
-        removed <- #pile %%= removeCompletedLines
-        #lineCount += removed
-    tryMove f = tryEdit . (#pos %~ f) =<< use #current
-    tryRotate f = tryEdit . (\p -> p & #rotation %~ f p.piece) =<< use #current
-    tryEdit p = do
-        b <- flip pieceFits p <$> use #pile
-        when b $ #current .= p
-        pure b
-    pieceFits g p =
-        either getAll (all isNothing)
-            . (.unwrap)
-            . traverse (Validation . first All . lookupGrid g . (+ p.pos) . rotate p.rotation)
-            $ shape p.piece
 
 sidebar ::
     (HasType (FLQ.Queue Piece) parent, HasType Level parent, HasType Word parent) =>
@@ -283,3 +260,40 @@ app foreignStoreId levelRef m =
 
 keysPressedTopic :: Topic KeyAction
 keysPressedTopic = topic "keys-pressed"
+
+setLevel :: IORef Level -> (Level -> Level) -> Effect p Model a
+setLevel levelRef f = do
+    l1 <- f <$> use #level
+    #level .= l1
+    io_ $ writeIORef levelRef l1
+
+pieceTiles :: ActivePiece -> NonEmpty (V2 Int)
+pieceTiles ActivePiece{..} = (+ pos) . rotate rotation <$> shape piece
+
+fixPiece :: (MonadState Model m) => m ()
+fixPiece = do
+    Model{current, next} <- get
+    #pile %= addToGrid current.piece (pieceTiles current)
+    next' <- #random %%= flip runRandomPieces (liftRandomiser opts.randomiser)
+    fanout #current #next .= first newPiece (FLQ.shift next' next)
+    removed <- #pile %%= removeCompletedLines
+    #lineCount += removed
+
+tryMove :: (MonadState Model m) => (V2 Int -> V2 Int) -> m Bool
+tryMove f = tryEdit . (#pos %~ f) =<< use #current
+
+tryRotate :: (MonadState Model m) => (Piece -> Rotation -> Rotation) -> m Bool
+tryRotate f = tryEdit . (\p -> p & #rotation %~ f p.piece) =<< use #current
+
+tryEdit :: (MonadState Model m) => ActivePiece -> m Bool
+tryEdit p = do
+    b <- flip pieceFits p <$> use #pile
+    when b $ #current .= p
+    pure b
+
+pieceFits :: Grid a -> ActivePiece -> Bool
+pieceFits g p =
+    either getAll (all isNothing)
+        . (.unwrap)
+        . traverse (Validation . first All . lookupGrid g . (+ p.pos) . rotate p.rotation)
+        $ shape p.piece
