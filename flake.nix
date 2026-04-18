@@ -8,6 +8,7 @@
   inputs.simple-http-server = { url = "github:TheWaWaR/simple-http-server/e79ddd3cd12db97062b4a33adc2e436d0022f4be"; flake = false; };
   inputs.browser-wasi-shim = { url = "https://registry.npmjs.org/@bjorn3/browser_wasi_shim/-/browser_wasi_shim-0.3.0.tgz"; flake = false; };
   inputs.ws = { url = "https://registry.npmjs.org/ws/-/ws-8.18.0.tgz"; flake = false; };
+  inputs.reflex-dom = { url = "github:ymeister/reflex-dom/ghc(js)-9.10"; flake = false; };
   outputs = inputs@{ self, nixpkgs, nixpkgs-unstable, flake-utils, haskell-nix, ... }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-darwin" ] (system:
       let
@@ -37,8 +38,8 @@
                       p.wasi32
                     ] ++ final.lib.optionals final.stdenv.hostPlatform.isLinux
                       [
-                        p.musl64
-                        p.aarch64-multiplatform
+                        # p.musl64
+                        # p.aarch64-multiplatform
                       ]
                     );
                 shell.nativeBuildInputs =
@@ -92,7 +93,21 @@
                       hash = "sha256-BT58B1PH8BihMkdEpyFOI2UG/iPmSGKo0LLu+xNM1Gs=";
                     })
                   ];
+                  packages.reflex-dom.flags = {
+                    use-warp = !final.stdenv.hostPlatform.isWasm;
+                    webkit2gtk = false;
+                  };
                 }];
+                cabalProjectLocal = ''
+source-repository-package
+  type: git
+  location: https://github.com/ymeister/reflex-dom
+  tag: ${inputs.reflex-dom.rev}
+  subdir: reflex-dom reflex-dom-core
+                '';
+                inputMap = {
+                  "https://github.com/ymeister/reflex-dom" = inputs.reflex-dom;
+                };
                 shell.withHoogle = false;
                 shell.shellHook =
                   let

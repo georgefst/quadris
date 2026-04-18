@@ -3,14 +3,20 @@ packages: .
 if arch(wasm32)
   shared: True
 
+if !arch(wasm32)
+  package reflex-dom
+    flags: +use-warp -webkit2gtk
+
 allow-newer:
   *:base,
   *:containers,
+  *:ghc-experimental,
   *:template-haskell,
   *:text,
   *:time,
 
 constraints:
   containers installed,
+  ghc-experimental installed,
   text installed,
   time installed,

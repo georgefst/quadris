@@ -649,6 +649,23 @@
         "type": "github"
       }
     },
+    "reflex-dom": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774408997,
+        "narHash": "sha256-H3Y3AJlkyZ4LbHtqbdhMW5u/H/Y37Yt/fUzlyCTU4Nw=",
+        "owner": "ymeister",
+        "repo": "reflex-dom",
+        "rev": "2542a1fb003850245a62dfb4fc3df64bb38c1c68",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ymeister",
+        "ref": "ghc(js)-9.10",
+        "repo": "reflex-dom",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "browser-wasi-shim": "browser-wasi-shim",
@@ -660,6 +677,7 @@
           "nixpkgs-2511"
         ],
         "nixpkgs-unstable": "nixpkgs-unstable_2",
+        "reflex-dom": "reflex-dom",
         "simple-http-server": "simple-http-server",
         "ws": "ws"
       }
