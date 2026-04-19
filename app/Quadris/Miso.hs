@@ -79,7 +79,7 @@ gridCanvas w h attrs f = Canvas.canvas
     ( attrs
         <> [ width_ $ ms w
            , height_ $ ms h
-           , cssVar "canvas-height" h
+           , cssVar "canvas-height" h -- TODO ideally we'd just use `attr` in CSS, but it's not widely supported
            ]
     )
     (const $ pure ())
