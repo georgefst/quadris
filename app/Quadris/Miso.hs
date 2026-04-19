@@ -76,11 +76,11 @@ gridCanvas ::
     ((Piece -> Bool -> V2 Int -> Canvas.Canvas ()) -> Canvas.Canvas ()) ->
     View parent action
 gridCanvas w h attrs f = Canvas.canvas
-    ( [ width_ $ ms w
-      , height_ $ ms h
-      , cssVar "canvas-height" h
-      ]
-        <> attrs
+    ( attrs
+        <> [ width_ $ ms w
+           , height_ $ ms h
+           , cssVar "canvas-height" h
+           ]
     )
     (const $ pure ())
     \() -> do
