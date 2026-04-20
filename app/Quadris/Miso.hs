@@ -1,37 +1,36 @@
 module Quadris.Miso (app, Model (..), initialModel) where
 
+import Control.Concurrent
 import Control.Monad
 import Control.Monad.Extra
-import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Bifunctor (bimap, first)
 import Data.Bool
 import Data.Foldable
 import Data.Foldable1 qualified as NE
 import Data.Function
-import Data.Generics.Product
 import Data.IORef
-import Data.IntSet qualified as IntSet
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe
 import Data.Monoid.Extra
-import Data.Optics.Operators
-import Data.Set qualified as Set
-import Data.Word
-import Foreign.Store
+import Data.Optics.Operators ((+=))
+import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Time
 import GHC.Generics (Generic)
+import JSDOM.CanvasRenderingContext2D qualified as CanvasCtx
+import JSDOM.Document qualified as Doc
+import JSDOM.HTMLCanvasElement qualified as Canvas
+import JSDOM.Types (CanvasRenderingContext2D (..), HTMLCanvasElement (..))
+import JSDOM.Types qualified as Dom
+import Language.Javascript.JSaddle
 import Linear (R1 (_x), R2 (_y), V2 (V2))
-import Miso hiding (for, new, (--->), (<---), (<--->))
-import Miso.CSS qualified as MS
-import Miso.Canvas qualified as Canvas
-import Miso.Html
-import Miso.Html.Property hiding (for_)
-import Miso.Optics
 import Optics hiding (uncons)
 import Optics.State.Operators
 import Quadris
+import Reflex.Dom hiding (Pause, Reset, current)
 import Safe (predDef, succDef)
 import System.Random.Stateful hiding (next, random)
 import Util
@@ -65,207 +64,121 @@ initialModel random0 level =
             <*> replicateM (fromIntegral opts.previewLength) (liftRandomiser opts.randomiser)
 
 data Action
-    = NoOp (Maybe MisoString)
-    | Init
-    | Tick
+    = Tick
     | KeyAction KeyAction
 
-gridCanvas ::
-    Int ->
-    Int ->
-    [Attribute action] ->
-    ((Piece -> Bool -> V2 Int -> Canvas.Canvas ()) -> Canvas.Canvas ()) ->
-    View parent action
-gridCanvas w h attrs f = Canvas.canvas
-    ( attrs
-        <> [ width_ $ ms w
-           , height_ $ ms h
-           , cssVar "canvas-height" h -- TODO ideally we'd just use `attr` in CSS, but it's not widely supported
-           ]
-    )
-    (const $ pure ())
-    \() -> do
-        -- TODO keep some canvas state rather than always redrawing everything?
-        Canvas.clearRect (0, 0, fromIntegral w, fromIntegral h)
-        f \p ghost (V2 x y) -> do
-            Canvas.fillStyle $ Canvas.ColorArg if ghost then MS.lightgrey else opts.colours p
-            Canvas.fillRect (fromIntegral x, fromIntegral y, 1, 1)
+gridCanvasAttributes :: Int -> Int -> Map Text Text
+gridCanvasAttributes w h =
+    -- TODO ideally we'd just use `attr` in CSS, instead of needing the variable, but it's not widely supported
+    Map.fromList [("width", T.show w), ("height", T.show h), ("style", T.show w <> "; --canvas-height: " <> T.show h)]
 
-grid ::
-    (HasType (FLQ.Queue Piece) parent, HasType Level parent, HasType Word parent) =>
-    Word32 -> IORef Level -> Model -> Component parent Model Action
-grid foreignStoreId levelRef m0 =
-    ( component
-        m0
-        ( (>> (io_ . writeStore (Store foreignStoreId) =<< get)) . \case
-            NoOp s -> io_ $ traverse_ consoleLog s
-            Init -> subscribe keysPressedTopic KeyAction (const $ NoOp Nothing)
-            Tick -> unlessM (use #paused) do
-                notOver <- not <$> use #gameOver
-                when notOver do
-                    success <- tryMove (+ V2 0 1)
-                    when (not success) do
-                        fixPiece
-                        gameOver <- uncurry intersectsGrid . first pieceTiles <$> use (fanout #current #pile)
-                        #gameOver .= gameOver
-            KeyAction MoveLeft -> void $ tryMove (- V2 1 0)
-            KeyAction MoveRight -> void $ tryMove (+ V2 1 0)
-            KeyAction RotateLeft -> void $ tryRotate \case
-                O -> id
-                I; S; Z -> bool NoRotation Rotation90 . (== NoRotation)
-                L; J; T -> succDef minBound
-            KeyAction RotateRight -> void $ tryRotate \case
-                O -> id
-                I; S; Z -> bool NoRotation Rotation90 . (== NoRotation)
-                L; J; T -> predDef maxBound
-            KeyAction SoftDrop -> void $ tryMove (+ V2 0 1)
-            KeyAction HardDrop -> whileM (tryMove (+ V2 0 1)) >> fixPiece
-            KeyAction LevelDown -> setLevel levelRef $ max 1 . predDef 1
-            KeyAction LevelUp -> setLevel levelRef $ min opts.topLevel . succDef opts.topLevel
-            KeyAction Pause -> #paused %= not
-            KeyAction Reset -> do
-                m <- get
-                put $ initialModel (snd m.random) m.level
-        )
-        ( \Model{..} ->
-            gridCanvas
-                opts.gridWidth
-                opts.gridHeight
-                ( mwhen gameOver [class_ "game-over"]
-                    <> mwhen paused [class_ "paused"]
-                )
-                $ deconstructGrid
-                    ( addToGrid (current.piece, False) (pieceTiles current)
-                        . applyWhen
-                            opts.ghost
-                            ( addToGrid (current.piece, True) $
-                                pieceTiles (while (pieceFits pile) (#pos %~ (+ V2 0 1)) current)
-                            )
-                        $ (,False) <$> pile
+drawGridCanvas ::
+    (MonadJSM m) =>
+    CanvasRenderingContext2D ->
+    Int ->
+    Int ->
+    ((Piece -> Bool -> V2 Int -> m ()) -> m ()) ->
+    m ()
+drawGridCanvas ctx w h f = do
+    -- TODO keep some canvas state rather than always redrawing everything?
+    CanvasCtx.clearRect ctx 0 0 (fromIntegral w) (fromIntegral h)
+    f \p ghost (V2 x y) -> do
+        CanvasCtx.setFillStyle ctx (toJSString $ if ghost then "lightgrey" else toJSString $ opts.colours p)
+        CanvasCtx.fillRect ctx (fromIntegral x) (fromIntegral y) 1 1
+
+handleAction :: Action -> Model -> Model
+handleAction =
+    execState . \case
+        Tick -> unlessM (use #paused) do
+            notOver <- not <$> use #gameOver
+            when notOver do
+                success <- tryMove (+ V2 0 1)
+                when (not success) do
+                    fixPiece
+                    gameOver <- uncurry intersectsGrid . first pieceTiles <$> use (fanout #current #pile)
+                    #gameOver .= gameOver
+        KeyAction MoveLeft -> void $ tryMove (- V2 1 0)
+        KeyAction MoveRight -> void $ tryMove (+ V2 1 0)
+        KeyAction RotateLeft -> void $ tryRotate \case
+            O -> id
+            I; S; Z -> bool NoRotation Rotation90 . (== NoRotation)
+            L; J; T -> succDef minBound
+        KeyAction RotateRight -> void $ tryRotate \case
+            O -> id
+            I; S; Z -> bool NoRotation Rotation90 . (== NoRotation)
+            L; J; T -> predDef maxBound
+        KeyAction SoftDrop -> void $ tryMove (+ V2 0 1)
+        KeyAction HardDrop -> whileM (tryMove (+ V2 0 1)) >> fixPiece
+        KeyAction LevelDown -> #level %= max 1 . predDef 1
+        KeyAction LevelUp -> #level %= min opts.topLevel . succDef opts.topLevel
+        KeyAction Pause -> #paused %= not
+        KeyAction Reset -> do
+            m <- get
+            put $ initialModel (snd m.random) m.level
+
+grid :: (MonadWidget t m) => Dynamic t Model -> m ()
+grid model = elAttr "div" ("id" =: "grid") do
+    ctx <-
+        getCanvasContext2D
+            =<< Dom.unsafeCastTo HTMLCanvasElement
+            =<< _element_raw . fst <$> elDynAttr' "canvas" (attrs <$> model) blank
+    performEvent_ $ drawModel ctx <$> updated model
+  where
+    attrs m =
+        gridCanvasAttributes opts.gridWidth opts.gridHeight
+            <> Map.fromList (mwhen m.gameOver [("class", "game-over")] <> mwhen m.paused [("class", "paused")])
+
+drawModel :: (MonadJSM m) => CanvasRenderingContext2D -> Model -> m ()
+drawModel ctx Model{..} =
+    drawGridCanvas ctx opts.gridWidth opts.gridHeight $
+        deconstructGrid
+            ( addToGrid (current.piece, False) (pieceTiles current)
+                . applyWhen
+                    opts.ghost
+                    ( addToGrid (current.piece, True) $
+                        pieceTiles (while (pieceFits pile) (#pos %~ (+ V2 0 1)) current)
                     )
-                    . flip
-                    . maybe (const $ pure ())
-                    . uncurry
-        )
-    )
-        { subs =
-            [ \sink -> forever do
-                -- TODO ideally subs would have some simple way of safely accessing model state
-                -- perhaps we could do this with a subcomponent? not sure even that is possible
-                -- unless we mounted a new component every time the level changes
-                level <- readIORef levelRef
-                sink Tick
-                threadDelay' $ opts.rate level
-            ]
-        , mount = Just Init
-        , bindings =
-            [ typed <--- #next
-            , typed <--- #level
-            , typed <--- #lineCount
-            ]
-        }
-
-sidebar ::
-    (HasType (FLQ.Queue Piece) parent, HasType Level parent, HasType Word parent) =>
-    (FLQ.Queue Piece, Level, Word) -> Component parent (FLQ.Queue Piece, Level, Word) ()
-sidebar m0 =
-    ( component
-        m0
-        (\() -> pure ())
-        ( \(pieces, level, lineCount) ->
-            div_
-                []
-                $ ( FLQ.toList pieces <&> \piece ->
-                        div_
-                            [class_ "next"]
-                            [ let
-                                ps = shape piece
-                                vMin = V2 (NE.minimum $ (^. lensVL _x) <$> ps) (NE.minimum $ (^. lensVL _y) <$> ps)
-                                vmax = V2 (NE.maximum $ (^. lensVL _x) <$> ps) (NE.maximum $ (^. lensVL _y) <$> ps)
-                                V2 w h = vmax - vMin + 1
-                               in
-                                gridCanvas w h [] \f -> for_ ((- vMin) <$> ps) $ f piece False
-                            ]
-                  )
-                    <> [ div_
-                            [class_ "level"]
-                            [ div_ [] [text "Level:"]
-                            , div_ [] [text $ ms level]
-                            ]
-                       , div_
-                            [class_ "line-count"]
-                            [ div_ [] [text "Lines cleared:"]
-                            , div_ [] [text $ ms lineCount]
-                            ]
-                       ]
-        )
-    )
-        { bindings =
-            [ typed ---> _1
-            , typed ---> _2
-            , typed ---> _3
-            ]
-        }
-
--- TODO even though this component effectively has no view, it seems to be the best way to encapsulate our key stuff
--- we should aim to improve the API of `keyboardSub` and maybe even `Sub` itself in order to make this unnecessary
-dummyKeyHandler :: Topic KeyAction -> Component parent (Map KeyAction Integer, Integer) (Either (KeyAction, Bool, Integer) [Int])
-dummyKeyHandler keyTopic =
-    ( component
-        (mempty, 0)
-        ( either
-            ( \(k, new, i) -> do
-                stillPressed <- if new then pure True else gets $ (== Just i) . Map.lookup k . fst
-                when stillPressed do
-                    io_ $ publish keyTopic k
-                    for_ (opts.keyDelays k) \(initialKeyDelay, repeatKeyDelay) -> io $ do
-                        liftIO $ threadDelay' if new then initialKeyDelay else repeatKeyDelay
-                        pure $ Left (k, False, i)
+                $ (,False) <$> pile
             )
-            \(Set.fromList . mapMaybe opts.keymap -> ks') -> do
-                ks <- use _1
-                freshlyPressed <-
-                    Map.fromList <$> flip mapMaybeM (Set.toList ks') \k ->
-                        if Map.member k ks
-                            then pure Nothing
-                            else Just . (k,) <$> (_2 <<%= succ)
-                -- TODO the union is disjoint, and the keys of the result will be precisely the elements of `ks'`...
-                -- we could probably somehow take advantage of this to simplify the code
-                _1 .= Map.union freshlyPressed (Map.filterWithKey (const . (`elem` ks')) ks)
-                void $ flip Map.traverseWithKey freshlyPressed $ flip \i -> issue . Left . (,True,i)
-        )
-        (\_ -> div_ [] [])
-    )
-        { subs = [keyboardSub $ Right . IntSet.toList]
-        }
+            . flip
+            . maybe (const $ pure ())
+            . uncurry
 
-app :: Word32 -> IORef Level -> Model -> Component parent (FLQ.Queue Piece, Level, Word) MisoString
-app foreignStoreId levelRef m =
-    component
-        (m.next, m.level, m.lineCount)
-        (io_ . consoleLog)
-        ( \_ ->
-            div_
-                []
-                [ div_
-                    []
-                    [ div_ [id_ "grid"] ["grid" +> grid foreignStoreId levelRef m]
-                    , div_ [id_ "sidebar"] ["sidebar" +> sidebar (m.next, m.level, m.lineCount)]
-                    ]
-                , div_
-                    [id_ "dummy-key-handler"]
-                    ["dummy-key-handler" +> dummyKeyHandler keysPressedTopic]
-                ]
-        )
+sidebar :: (MonadWidget t m) => Dynamic t Model -> m ()
+sidebar model = elAttr "div" ("id" =: "sidebar") do
+    el "div" do
+        void
+            . dyn
+            $ ((.next) <$> model) <&> \pieces ->
+                for_ (FLQ.toList pieces) \piece -> elClass "div" "next" do
+                    let
+                        ps = shape piece
+                        vMin = V2 (NE.minimum $ (^. lensVL _x) <$> ps) (NE.minimum $ (^. lensVL _y) <$> ps)
+                        vmax = V2 (NE.maximum $ (^. lensVL _x) <$> ps) (NE.maximum $ (^. lensVL _y) <$> ps)
+                        V2 w h = vmax - vMin + 1
+                    ctx <-
+                        getCanvasContext2D
+                            =<< Dom.unsafeCastTo HTMLCanvasElement
+                            =<< _element_raw . fst <$> elAttr' "canvas" (gridCanvasAttributes w h) blank
+                    drawGridCanvas ctx w h \f -> for_ ((- vMin) <$> ps) $ f piece False
+        elClass "div" "level" do
+            el "div" $ text "Level:"
+            el "div" $ dynText $ T.show . (.level) <$> model
+        elClass "div" "line-count" do
+            el "div" $ text "Lines cleared:"
+            el "div" $ dynText $ T.show . (.lineCount) <$> model
 
-keysPressedTopic :: Topic KeyAction
-keysPressedTopic = topic "keys-pressed"
-
-setLevel :: IORef Level -> (Level -> Level) -> Effect p Model a
-setLevel levelRef f = do
-    l1 <- f <$> use #level
-    #level .= l1
-    io_ $ writeIORef levelRef l1
+app :: (MonadWidget t m) => Model -> m ()
+app m0 = do
+    body <- Doc.getBodyUnchecked =<< askDocument
+    keyActionEv <- keyEvents body
+    rec -- game state with variable-rate tick
+        rateDyn <- holdUniqDyn $ opts.rate . (.level) <$> modelDyn
+        tickEv <- switchHold never =<< dyn (tickLossyFromPostBuildTime <$> rateDyn)
+        modelDyn <- foldDyn ($) m0 $ handleAction <$> leftmost [Tick <$ tickEv, KeyAction <$> keyActionEv]
+    el "div" do
+        grid modelDyn
+        sidebar modelDyn
 
 pieceTiles :: ActivePiece -> NonEmpty (V2 Int)
 pieceTiles ActivePiece{..} = (+ pos) . rotate rotation <$> shape piece
@@ -297,3 +210,66 @@ pieceFits g p =
         . (.unwrap)
         . traverse (Validation . first All . lookupGrid g . (+ p.pos) . rotate p.rotation)
         $ shape p.piece
+
+-- TODO factor out to utility module, assuming this is a reasonable abstraction
+
+getCanvasContext2D :: (MonadJSM m) => HTMLCanvasElement -> m CanvasRenderingContext2D
+getCanvasContext2D canvas =
+    liftJSM $
+        Dom.unsafeCastTo CanvasRenderingContext2D
+            =<< toJSVal
+            =<< Canvas.getContext canvas ("2d" :: JSString) ([] :: [Text])
+
+-- TODO vibe-coded, to match the type of
+-- \body -> fmapMaybe toAction <$> wrapDomEvent body (elementOnEventName Keydown) getKeyEvent
+
+{- | Key repeat system. Tracks keydown/keyup, fires immediately on press,
+then repeats with custom initial/repeat delays. Supports multiple simultaneous keys.
+-}
+keyEvents ::
+    (MonadWidget t m) =>
+    Dom.HTMLElement ->
+    m (Event t KeyAction)
+keyEvents body = do
+    keydowns <- wrapDomEvent body (elementOnEventName Keydown) getKeyEvent
+    keyups <- wrapDomEvent body (elementOnEventName Keyup) getKeyEvent
+    let toAction = opts.keymap . fromIntegral
+        downActions = fmapMaybe toAction keydowns
+        upActions = fmapMaybe toAction keyups
+
+    -- per-key cancellation refs: on keydown create a new ref, on keyup set it to False
+    cancelRefs <- liftIO $ newIORef (mempty :: Map KeyAction (IORef Bool))
+
+    -- on keyup, cancel any running repeat for that key
+    performEvent_ $
+        upActions <&> \k -> liftIO do
+            refs <- readIORef cancelRefs
+            for_ (Map.lookup k refs) \ref -> writeIORef ref False
+
+    -- on keydown, fire immediately and start a repeat thread if applicable
+    repeatEv <-
+        performEventAsync $
+            downActions <&> \k fire -> liftIO do
+                -- cancel any existing repeat for this key
+                refs <- readIORef cancelRefs
+                for_ (Map.lookup k refs) \ref -> writeIORef ref False
+                -- create a new cancellation ref
+                alive <- newIORef True
+                modifyIORef' cancelRefs (Map.insert k alive)
+                -- fire immediately
+                fire k
+                -- start repeat loop if this key has repeat delays
+                for_ (opts.keyDelays k) \(initialDelay, repeatDelay) ->
+                    void $ forkIO do
+                        sleep initialDelay
+                        fix \loop_ -> do
+                            stillAlive <- readIORef alive
+                            when stillAlive do
+                                fire k
+                                sleep repeatDelay
+                                loop_
+
+    pure repeatEv
+  where
+    sleep :: NominalDiffTime -> IO ()
+    sleep = threadDelay . round . (* 1_000_000) . nominalDiffTimeToSeconds

@@ -9,14 +9,11 @@ body {
   margin: 0;
   font-family: Helvetica, Arial, sans-serif;
   height: 100vh;
-  > div {
+  > * {
     height: 100%;
-    > :not(:is(#dummy-key-handler)) {
-      height: 100%;
-      display: flex;
-      justify-content: space-evenly;
-      align-items: center;
-    }
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
   }
 }
 

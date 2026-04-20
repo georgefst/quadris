@@ -2,13 +2,11 @@
 
 module Main (main) where
 
-import Data.Functor
-import Data.IORef
-import Foreign.Store
-import Miso
+import Data.Map qualified as Map
+import Data.Text qualified as T
 import Quadris (Opts (..), opts)
 import Quadris.Miso
-import System.Environment
+import Reflex.Dom
 
 main :: IO ()
 main = do
@@ -19,29 +17,41 @@ main = do
     -- TODO hardcoding ID is said in docs to be "hideously unsafe"
     -- but we need to use the same one after reload somehow
     -- use GHCIWatch hooks to run this on init instead?
-    let foreignStoreId = 0
-    model <-
-        maybe (pure $ initialModel random 1) readStore
-            -- TODO find better way of allowing the developer to signal that old state should be thrown away (per component)
-            -- uncomment this line to reset the state, without restarting REPL
-            -- =<< (\x -> pure Nothing)
-            -- TODO catch failures here, e.g. for when the model type has changed
-            =<< lookupStore foreignStoreId
+    -- let foreignStoreId = 0
+    -- model <-
+    --     maybe (pure $ initialModel random 1) readStore
+    --         -- TODO find better way of allowing the developer to signal that old state should be thrown away (per component)
+    --         -- uncomment this line to reset the state, without restarting REPL
+    --         -- =<< (\x -> pure Nothing)
+    --         -- TODO catch failures here, e.g. for when the model type has changed
+    --         =<< lookupStore foreignStoreId
+    let model = initialModel random 1
     -- TODO this is a hack to ensure the stylesheet is reloaded on GHCI reload
     -- it's not about the HTTP cache - browsers don't even make a new request since the DOM element hasn't changed
     -- we use content hashing in an attempt to ensure that we don't unnecessarily refetch and thus cause page flash
     -- it even prevents the flash when the CSS returns to a state it was in previously, as that hash is cached
     -- this does seem a bit fragile though, particularly with printing seemingly being needed to prevent the flash
     -- anyway, it'd be better if the hashing were done server-side with ETags, but that makes browser mode more complex
-    cacheBuster <- ms <$> fetchCssHash
+    cacheBuster <- fetchCssHash
     print cacheBuster
     -- TODO it'd be simpler if we could write to the store on unmount only, instead of every update
     -- and in theory more efficient, at least for huge models
     -- but the unmount action doesn't get run on reload
     -- and actually, given that it can't do IO directly, we'd need a new action as well...
-    levelRef <- newIORef model.level
-    run <- getProgName <&> \b -> if b == "<interactive>" then reload else startApp
-    run defaultEvents (app foreignStoreId levelRef model){styles = [Href ("assets/style.css#" <> cacheBuster) False]}
+    -- levelRef <- newIORef model.level
+    -- run <- getProgName <&> \b -> if b == "<interactive>" then reload else startApp
+    -- run defaultEvents (app foreignStoreId levelRef model){styles = [Href ("assets/style.css#" <> cacheBuster) False]}
+    mainWidgetWithHead
+        ( elAttr
+            "link"
+            ( Map.fromList
+                [ ("rel", "stylesheet")
+                , ("href", "assets/style.css#" <> T.pack (show cacheBuster))
+                ]
+            )
+            blank
+        )
+        (app model)
 
 #ifdef wasi_HOST_OS
 -- TODO we're hitting compiler errors using these, despite the first one being straight from the GHC users' guide
