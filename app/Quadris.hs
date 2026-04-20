@@ -2,7 +2,6 @@ module Quadris where
 
 import Control.Monad.Reader
 import Control.Monad.State.Strict
-import Data.Aeson qualified as Aeson
 import Data.Bifunctor (second)
 import Data.Colour.RGBSpace
 import Data.Colour.RGBSpace.HSL
@@ -14,14 +13,11 @@ import Data.Massiv.Array (Array)
 import Data.Massiv.Array qualified as A
 import Data.Maybe
 import Data.Monoid.Extra
+import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Time (NominalDiffTime)
-import GHC.Generics (Generic, Generically (Generically))
+import GHC.Generics (Generic)
 import Linear (V2 (V2))
-import Miso.Aeson
-import Miso.CSS (Color)
-import Miso.CSS qualified as MS
-import Miso.JSON (FromJSON, ToJSON)
-import Miso.String (ToMisoString)
 import System.Random.Stateful hiding (next, random)
 import Util
 import Util.Shuffle
@@ -36,7 +32,7 @@ data Opts = Opts
     , topLevel :: Level
     , keyDelays :: KeyAction -> Maybe (NominalDiffTime, NominalDiffTime)
     , rate :: Level -> NominalDiffTime
-    , colours :: Piece -> Color
+    , colours :: Piece -> Text
     , keymap :: Int -> Maybe KeyAction
     }
 
@@ -78,12 +74,13 @@ opts =
   where
     topLevel = Level 20
 
--- TODO work out why Miso's `hsl` always just produces black on canvas
-hsl' :: Double -> Double -> Double -> Color
-hsl' h s l = uncurryRGB MS.rgb $ fmap (floor @Double . (* 255)) $ hsl h (s / 100) (l / 100)
+hsl' :: Double -> Double -> Double -> Text
+hsl' h s l = uncurryRGB f $ fmap (floor @Double @Int . (* 255)) $ hsl h (s / 100) (l / 100)
+  where
+    f r g b = T.pack $ "rgb(" <> show r <> "," <> show g <> "," <> show b <> ")"
 
 newtype Level = Level Word
-    deriving newtype (Eq, Ord, Show, Enum, Bounded, Num, Real, Integral, ToMisoString)
+    deriving newtype (Eq, Ord, Show, Enum, Bounded, Num, Real, Integral)
 
 data KeyAction
     = MoveLeft
@@ -97,8 +94,6 @@ data KeyAction
     | Pause
     | Reset
     deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
-    deriving (Aeson.FromJSON, Aeson.ToJSON) via Generically KeyAction
-    deriving (FromJSON, ToJSON) via (MisoAeson KeyAction)
 
 data Piece = O | I | S | Z | L | J | T
     deriving stock (Eq, Ord, Show, Enum, Bounded)
