@@ -685,17 +685,16 @@
     "simple-http-server": {
       "flake": false,
       "locked": {
-        "lastModified": 1773758967,
-        "narHash": "sha256-u4aS97fXux/ZBNnnU9VBLkOg9vWS+MIAFxJYi02O8oE=",
+        "lastModified": 1773806200,
+        "narHash": "sha256-lFhpsaPn9WzBlGYXs2ZVNtSn/vHUjIGFuzCF/fvpeuM=",
         "owner": "TheWaWaR",
         "repo": "simple-http-server",
-        "rev": "e79ddd3cd12db97062b4a33adc2e436d0022f4be",
+        "rev": "1ec81b86c077730fa0cb0e26d18dca07af10a138",
         "type": "github"
       },
       "original": {
         "owner": "TheWaWaR",
         "repo": "simple-http-server",
-        "rev": "e79ddd3cd12db97062b4a33adc2e436d0022f4be",
         "type": "github"
       }
     },

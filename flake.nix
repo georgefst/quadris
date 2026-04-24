@@ -5,7 +5,7 @@
   inputs.nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.hls = { url = "github:haskell/haskell-language-server/fourmolu-ghc-9.14"; flake = false; };
-  inputs.simple-http-server = { url = "github:TheWaWaR/simple-http-server/e79ddd3cd12db97062b4a33adc2e436d0022f4be"; flake = false; };
+  inputs.simple-http-server = { url = "github:TheWaWaR/simple-http-server"; flake = false; };
   inputs.browser-wasi-shim = { url = "https://registry.npmjs.org/@bjorn3/browser_wasi_shim/-/browser_wasi_shim-0.3.0.tgz"; flake = false; };
   inputs.ws = { url = "https://registry.npmjs.org/ws/-/ws-8.18.0.tgz"; flake = false; };
   inputs.reflex-dom = { url = "github:ymeister/reflex-dom/ghc(js)-9.10"; flake = false; };
@@ -126,7 +126,7 @@ source-repository-package
                 buildRustPackage = args: rustPlatform.buildRustPackage (finalAttrs: args finalAttrs // {
                   version = "0.8.0";
                   src = inputs.simple-http-server;
-                  cargoHash = "sha256-Ji43cp/+fEJ+z0mTIS/CnId1JP9xk9Ti0CwRRKY2saE=";
+                  cargoHash = "sha256-zYR8W4F7kiIX/8ajjh9kdCZ4dndU4t8ayKnFAjV0pfw=";
                   buildFeatures = [ "tls" ];
                 });
               };
