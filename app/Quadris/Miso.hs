@@ -5,7 +5,9 @@ import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.State.Strict
 import Data.Bifunctor (bimap, first)
+import Data.Bitraversable
 import Data.Bool
+import Data.Coerce
 import Data.Foldable
 import Data.Foldable1 qualified as NE
 import Data.Function
@@ -20,10 +22,11 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Time
 import GHC.Generics (Generic)
+import GHCJS.Prim (JSValueRef)
 import JSDOM.CanvasRenderingContext2D qualified as CanvasCtx
 import JSDOM.Document qualified as Doc
 import JSDOM.HTMLCanvasElement qualified as Canvas
-import JSDOM.Types (CanvasRenderingContext2D (..), HTMLCanvasElement (..))
+import JSDOM.Types (CanvasRenderingContext2D, HTMLCanvasElement)
 import JSDOM.Types qualified as Dom
 import Language.Javascript.JSaddle
 import Linear (R1 (_x), R2 (_y), V2 (V2))
@@ -118,10 +121,7 @@ handleAction =
 
 grid :: (MonadWidget t m) => Dynamic t Model -> m ()
 grid model = elAttr "div" ("id" =: "grid") do
-    ctx <-
-        getCanvasContext2D
-            =<< Dom.unsafeCastTo HTMLCanvasElement
-            =<< _element_raw . fst <$> elDynAttr' "canvas" (attrs <$> model) blank
+    ctx <- getCanvasContext2D =<< canvasDynAttr_ (attrs <$> model)
     performEvent_ $ drawModel ctx <$> updated model
   where
     attrs m =
@@ -156,10 +156,7 @@ sidebar model = elAttr "div" ("id" =: "sidebar") do
                         vMin = V2 (NE.minimum $ (^. lensVL _x) <$> ps) (NE.minimum $ (^. lensVL _y) <$> ps)
                         vmax = V2 (NE.maximum $ (^. lensVL _x) <$> ps) (NE.maximum $ (^. lensVL _y) <$> ps)
                         V2 w h = vmax - vMin + 1
-                    ctx <-
-                        getCanvasContext2D
-                            =<< Dom.unsafeCastTo HTMLCanvasElement
-                            =<< _element_raw . fst <$> elAttr' "canvas" (gridCanvasAttributes w h) blank
+                    ctx <- getCanvasContext2D =<< canvasAttr_ (gridCanvasAttributes w h)
                     drawGridCanvas ctx w h \f -> for_ ((- vMin) <$> ps) $ f piece False
         elClass "div" "level" do
             el "div" $ text "Level:"
@@ -173,9 +170,10 @@ app m0 = do
     body <- Doc.getBodyUnchecked =<< askDocument
     keyActionEv <- keyEvents body
     rec -- game state with variable-rate tick
+        -- let rateDyn = opts.rate . (.level) <$> modelDyn
         rateDyn <- holdUniqDyn $ opts.rate . (.level) <$> modelDyn
         tickEv <- switchHold never =<< dyn (tickLossyFromPostBuildTime <$> rateDyn)
-        modelDyn <- foldDyn ($) m0 $ handleAction <$> leftmost [Tick <$ tickEv, KeyAction <$> keyActionEv]
+        modelDyn <- foldDyn ($) m0 $ mergeWith (.) [handleAction Tick <$ tickEv, handleAction . KeyAction <$> keyActionEv]
     el "div" do
         grid modelDyn
         sidebar modelDyn
@@ -210,15 +208,6 @@ pieceFits g p =
         . (.unwrap)
         . traverse (Validation . first All . lookupGrid g . (+ p.pos) . rotate p.rotation)
         $ shape p.piece
-
--- TODO factor out to utility module, assuming this is a reasonable abstraction
-
-getCanvasContext2D :: (MonadJSM m) => HTMLCanvasElement -> m CanvasRenderingContext2D
-getCanvasContext2D canvas =
-    liftJSM $
-        Dom.unsafeCastTo CanvasRenderingContext2D
-            =<< toJSVal
-            =<< Canvas.getContext canvas ("2d" :: JSString) ([] :: [Text])
 
 -- TODO vibe-coded, to match the type of
 -- \body -> fmapMaybe toAction <$> wrapDomEvent body (elementOnEventName Keydown) getKeyEvent
@@ -273,3 +262,22 @@ keyEvents body = do
   where
     sleep :: NominalDiffTime -> IO ()
     sleep = threadDelay . round . (* 1_000_000) . nominalDiffTimeToSeconds
+
+getCanvasContext2D :: (MonadJSM m) => HTMLCanvasElement -> m CanvasRenderingContext2D
+getCanvasContext2D canvas =
+    liftJSM $ Dom.unsafeCastTo pFromJSVal =<< toJSVal =<< Canvas.getContext canvas ("2d" :: JSString) ([] :: [Text])
+
+type C t m =
+    ( Coercible (RawElement (DomBuilderSpace m)) (IORef JSValueRef)
+    , DomBuilder t m
+    , PostBuild t m
+    , MonadJSM m
+    )
+canvasDynAttr' :: (C t m) => Dynamic t (Map Text Text) -> m a -> m (HTMLCanvasElement, a)
+canvasDynAttr' attrs x = bitraverse (Dom.unsafeCastTo pFromJSVal . _element_raw) pure =<< elDynAttr' "canvas" attrs x
+canvasAttr' :: (C t m) => Map Text Text -> m a -> m (HTMLCanvasElement, a)
+canvasAttr' attrs x = bitraverse (Dom.unsafeCastTo pFromJSVal . _element_raw) pure =<< elAttr' "canvas" attrs x
+canvasDynAttr_ :: (C t m) => Dynamic t (Map Text Text) -> m HTMLCanvasElement
+canvasDynAttr_ attrs = fst <$> canvasDynAttr' attrs (pure ())
+canvasAttr_ :: (C t m) => Map Text Text -> m HTMLCanvasElement
+canvasAttr_ attrs = fst <$> canvasAttr' attrs (pure ())
